@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+*.log
+logs/
+
+# SQLite Databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# C++/Arduino/ESP32编译产物
+.pio/
+.pioenvs/
+.piolibdeps/
+build/
+latex/
+html/
+*.local.txt
+*.elf
+*.bin
+*.map
+*.hex
+*.o
+*.d
+
+# OS-specific
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
