@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>温湿度智能远程监控大屏</title>
+    <!-- 引入 Inter 字体和 FontAwesome 图标 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入 Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+            --glass-bg: rgba(30, 41, 59, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --neon-blue: #38bdf8;
+            --neon-green: #10b981;
+            --neon-rose: #f43f5e;
+            --neon-amber: #f59e0b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* 顶部导航与发光背景 */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            background: rgba(15, 23, 42, 0.2);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--glass-border);
+            position: relative;
+        }
+        
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 10%;
+            width: 80%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            font-size: 24px;
+            background: linear-gradient(135deg, #38bdf8 0%, #0369a1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.4));
+        }
+
+        header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: 0.5px;
+        }
+
+        /* 主体布局 */
+        main {
+            flex: 1;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 30px 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* 控制栏面板 */
+        .control-panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .selector-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, .btn-group button {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        select:focus {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-group button {
+            background: transparent;
+            border: none;
+            padding: 8px 16px;
+        }
+
+        .btn-group button.active {
+            background: var(--neon-blue);
+            color: #0f172a;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.25);
+        }
+
+        /* 状态卡片网格 */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(16px);
+            border-radius: 20px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card-icon {
+            font-size: 20px;
+            color: var(--text-secondary);
+        }
+
+        .card-value {
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            margin: 5px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+
+        .card-unit {
+            font-size: 20px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .card-footer {
+            margin-top: 15px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 呼吸指示灯 */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-green {
+            background-color: var(--neon-green);
+            box-shadow: 0 0 10px var(--neon-green);
+            animation: pulse-green 2s infinite;
+        }
+
+        .dot-red {
+            background-color: var(--neon-rose);
+            box-shadow: 0 0 10px var(--neon-rose);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 14px var(--neon-green); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 14px var(--neon-rose); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        /* 霓虹特效 */
+        .temp-card {
+            border-top: 3px solid var(--neon-amber);
+        }
+        .temp-card .card-icon, .temp-card .card-value {
+            color: var(--neon-amber);
+            text-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+        }
+
+        .humi-card {
+            border-top: 3px solid var(--neon-blue);
+        }
+        .humi-card .card-icon, .humi-card .card-value {
+            color: var(--neon-blue);
+            text-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+        }
+
+        /* 图表区 */
+        .chart-panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(16px);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.25);
+            flex: 1;
+            min-height: 400px;
+            position: relative;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--glass-border);
+            background: rgba(15, 23, 42, 0.3);
+            margin-top: auto;
+        }
+
+        /* 空状态与异常提示 */
+        .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 40px;
+            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* 移动端排版优化 */
+        @media (max-width: 768px) {
+            header {
+                padding: 15px 20px;
+            }
+            .control-panel {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .selector-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .btn-group {
+                justify-content: center;
+            }
+            main {
+                padding: 15px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo-area">
+            <i class="fa-solid fa-tower-broadcast logo-icon"></i>
+            <h1>温湿度智能远程监控大屏</h1>
+        </div>
+        <div id="connection-status" style="font-size: 13px; color: var(--neon-green)">
+            <span class="status-dot dot-green"></span> 服务端在线
+        </div>
+    </header>
+
+    <main>
+        <!-- 筛选与控制栏 -->
+        <div class="control-panel">
+            <div class="selector-group">
+                <div>
+                    <label for="deviceSelect">监控目标设备</label>
+                    <select id="deviceSelect" style="margin-top: 6px; width: 100%;">
+                        <option value="">-- 请选择设备 --</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="btn-group" id="timeRangeGroup">
+                <button data-days="1" class="active">最近24小时</button>
+                <button data-days="7">最近7天</button>
+                <button data-days="30">最近30天</button>
+            </div>
+        </div>
+
+        <!-- 实时卡片组 -->
+        <div class="cards-grid">
+            <!-- 温度实时展示 -->
+            <div class="card temp-card">
+                <div class="card-header">
+                    <span class="card-title">实时环境温度</span>
+                    <i class="fa-solid fa-temperature-half card-icon"></i>
+                </div>
+                <div class="card-value" id="latestTemp">--<span class="card-unit">°C</span></div>
+                <div class="card-footer">
+                    <span class="status-dot" id="tempDot"></span>
+                    <span id="tempStatus">无数据</span>
+                </div>
+            </div>
+
+            <!-- 湿度实时展示 -->
+            <div class="card humi-card">
+                <div class="card-header">
+                    <span class="card-title">实时环境湿度</span>
+                    <i class="fa-solid fa-droplet card-icon"></i>
+                </div>
+                <div class="card-value" id="latestHumi">--<span class="card-unit">%</span></div>
+                <div class="card-footer">
+                    <span class="status-dot" id="humiDot"></span>
+                    <span id="humiStatus">无数据</span>
+                </div>
+            </div>
+
+            <!-- 上报时效展示 -->
+            <div class="card time-card">
+                <div class="card-header">
+                    <span class="card-title">最后更新时间</span>
+                    <i class="fa-solid fa-clock-rotate-left card-icon"></i>
+                </div>
+                <div class="card-value" id="updateTime" style="font-size: 26px; line-height: 48px; font-weight: 600; color: #e2e8f0; text-shadow:none;">--:--:--</div>
+                <div class="card-footer">
+                    <span class="status-dot dot-green" style="animation: pulse-green 3s infinite;"></span>
+                    <span>上报周期：60秒 (Ajax轮询中)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史图表 -->
+        <div class="chart-panel">
+            <div class="chart-header">
+                <div class="chart-title">
+                    <i class="fa-solid fa-chart-line" style="color: var(--neon-blue)"></i>
+                    <span>温湿度历史趋势查看</span>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="historyChart"></canvas>
+                <div class="empty-state" id="chartEmptyState">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <p>请选择一个活跃设备以加载历史趋势曲线图</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>轻量化远程温湿度监控系统 v2.1 | Powered by FastAPI, SQLite & Chart.js</p>
+    </footer>
+
+    <script>
+        // 全局状态变量
+        let currentDeviceId = "";
+        let currentDays = 1;
+        let chart = null;
+        let updateInterval = null;
+
+        // 获取 DOM 元素
+        const deviceSelect = document.getElementById("deviceSelect");
+        const latestTempEl = document.getElementById("latestTemp");
+        const latestHumiEl = document.getElementById("latestHumi");
+        const updateTimeEl = document.getElementById("updateTime");
+        const tempStatusEl = document.getElementById("tempStatus");
+        const humiStatusEl = document.getElementById("humiStatus");
+        const tempDot = document.getElementById("tempDot");
+        const humiDot = document.getElementById("humiDot");
+        const chartEmptyState = document.getElementById("chartEmptyState");
+        const timeRangeGroup = document.getElementById("timeRangeGroup");
+
+        // 页面初始化
+        window.addEventListener("DOMContentLoaded", async () => {
+            await loadDevices();
+            setupEventListeners();
+            
+            // 每 30 秒更新一次设备下拉列表，方便自动发现新设备
+            setInterval(loadDevices, 30000);
+        });
+
+        // 绑定事件监听
+        function setupEventListeners() {
+            // 选择设备改变
+            deviceSelect.addEventListener("change", (e) => {
+                currentDeviceId = e.target.value;
+                if (currentDeviceId) {
+                    chartEmptyState.style.display = "none";
+                    refreshDashboard();
+                    
+                    // 重置并启动 60 秒轮询刷新卡片
+                    if (updateInterval) clearInterval(updateInterval);
+                    updateInterval = setInterval(refreshLatestData, 60000);
+                } else {
+                    chartEmptyState.style.display = "block";
+                    resetCardValues();
+                    if (chart) {
+                        chart.destroy();
+                        chart = null;
+                    }
+                    if (updateInterval) clearInterval(updateInterval);
+                }
+            });
+
+            // 时间段筛选按钮切换
+            timeRangeGroup.addEventListener("click", async (e) => {
+                if (e.target.tagName === "BUTTON") {
+                    // 按钮激活状态变更
+                    const buttons = timeRangeGroup.querySelectorAll("button");
+                    buttons.forEach(btn => btn.classList.remove("active"));
+                    e.target.classList.add("active");
+
+                    currentDays = parseInt(e.target.dataset.days);
+                    if (currentDeviceId) {
+                        await drawChart();
+                    }
+                }
+            });
+        }
+
+        // 加载所有活跃设备列表
+        async function loadDevices() {
+            try {
+                const res = await fetch("/api/devices");
+                if (!res.ok) throw new Error("获取设备列表失败");
+                const devices = await res.json();
+                
+                // 保留当前选中的设备值
+                const prevSelected = deviceSelect.value;
+                
+                // 渲染 Option 项
+                deviceSelect.innerHTML = '<option value="">-- 选择设备 --</option>';
+                devices.forEach(device => {
+                    const option = document.createElement("option");
+                    option.value = device;
+                    option.textContent = device;
+                    deviceSelect.appendChild(option);
+                });
+
+                // 恢复先前选中的项
+                if (devices.includes(prevSelected)) {
+                    deviceSelect.value = prevSelected;
+                } else if (devices.length > 0 && !prevSelected) {
+                    // 默认选择第一台设备
+                    deviceSelect.value = devices[0];
+                    currentDeviceId = devices[0];
+                    chartEmptyState.style.display = "none";
+                    refreshDashboard();
+                    
+                    if (updateInterval) clearInterval(updateInterval);
+                    updateInterval = setInterval(refreshLatestData, 60000);
+                }
+            } catch (err) {
+                console.error("加载设备出错:", err);
+            }
+        }
+
+        // 重置实时卡片数值
+        function resetCardValues() {
+            latestTempEl.innerHTML = '--<span class="card-unit">°C</span>';
+            latestHumiEl.innerHTML = '--<span class="card-unit">%</span>';
+            updateTimeEl.textContent = '--:--:--';
+            tempStatusEl.textContent = '无数据';
+            humiStatusEl.textContent = '无数据';
+            tempDot.className = 'status-dot';
+            humiDot.className = 'status-dot';
+        }
+
+        // 统一刷新大屏 (刷新最新数据 + 刷新图表)
+        async function refreshDashboard() {
+            if (!currentDeviceId) return;
+            await refreshLatestData();
+            await drawChart();
+        }
+
+        // 1. Ajax 周期轮询：拉取并局部刷新最新的设备卡片数据
+        async function refreshLatestData() {
+            if (!currentDeviceId) return;
+            try {
+                const res = await fetch(`/api/latest?device_id=${currentDeviceId}`);
+                if (res.status === 404) {
+                    resetCardValues();
+                    return;
+                }
+                const data = await res.json();
+                
+                // 渲染实时温度
+                latestTempEl.innerHTML = `${data.temp.toFixed(1)}<span class="card-unit">°C</span>`;
+                if (data.temp > 35) {
+                    tempStatusEl.textContent = "温度超标 (异常)";
+                    tempDot.className = "status-dot dot-red";
+                } else {
+                    tempStatusEl.textContent = "温度正常";
+                    tempDot.className = "status-dot dot-green";
+                }
+
+                // 渲染实时湿度
+                latestHumiEl.innerHTML = `${data.humi.toFixed(1)}<span class="card-unit">%</span>`;
+                if (data.humi > 80) {
+                    humiStatusEl.textContent = "湿度超标 (异常)";
+                    humiDot.className = "status-dot dot-red";
+                } else {
+                    humiStatusEl.textContent = "湿度正常";
+                    humiDot.className = "status-dot dot-green";
+                }
+
+                // 渲染时间戳
+                const date = new Date(data.ts * 1000);
+                updateTimeEl.textContent = date.toLocaleTimeString('zh-CN', { hour12: false });
+                
+            } catch (err) {
+                console.error("更新最新卡片数据失败:", err);
+            }
+        }
+
+        // 2. 渲染 Chart.js 历史时序折线图
+        async function drawChart() {
+            if (!currentDeviceId) return;
+            try {
+                const res = await fetch(`/api/history?device_id=${currentDeviceId}&days=${currentDays}`);
+                if (!res.ok) throw new Error("获取历史记录失败");
+                const historyData = await res.json();
+                
+                const labels = [];
+                const tempValues = [];
+                const humiValues = [];
+
+                historyData.forEach(item => {
+                    const date = new Date(item.ts * 1000);
+                    // 24小时显示具体时分，其它天数显示月日时分
+                    if (currentDays === 1) {
+                        labels.push(date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }));
+                    } else {
+                        labels.push(`${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:00`);
+                    }
+                    tempValues.push(item.temp);
+                    humiValues.push(item.humi);
+                });
+
+                if (chart) {
+                    chart.destroy(); // 销毁旧图表，防重复重叠绘制
+                }
+
+                const ctx = document.getElementById("historyChart").getContext("2d");
+                
+                // 创建图表渐变填充
+                const tempGradient = ctx.createLinearGradient(0, 0, 0, 300);
+                tempGradient.addColorStop(0, 'rgba(245, 158, 11, 0.25)');
+                tempGradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
+
+                const humiGradient = ctx.createLinearGradient(0, 0, 0, 300);
+                humiGradient.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
+                humiGradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
+
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: '温度 (°C)',
+                                data: tempValues,
+                                borderColor: '#f59e0b',
+                                borderWidth: 2,
+                                backgroundColor: tempGradient,
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: currentDays === 1 ? 2 : 0,
+                                yAxisID: 'yTemp'
+                            },
+                            {
+                                label: '湿度 (%)',
+                                data: humiValues,
+                                borderColor: '#38bdf8',
+                                borderWidth: 2,
+                                backgroundColor: humiGradient,
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: currentDays === 1 ? 2 : 0,
+                                yAxisID: 'yHumi'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#94a3b8',
+                                    font: { family: 'Inter', size: 12 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                titleColor: '#fff',
+                                bodyColor: '#cbd5e1',
+                                borderColor: 'rgba(255,255,255,0.1)',
+                                borderWidth: 1,
+                                textDirection: 'ltr'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(255,255,255,0.03)' },
+                                ticks: {
+                                    color: '#64748b',
+                                    font: { family: 'Inter', size: 10 },
+                                    maxTicksLimit: currentDays === 1 ? 12 : 24
+                                }
+                            },
+                            yTemp: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: { display: true, text: '温度 (°C)', color: '#f59e0b', font: { weight: 'bold' } },
+                                grid: { color: 'rgba(255,255,255,0.03)' },
+                                ticks: { color: '#64748b' }
+                            },
+                            yHumi: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: { display: true, text: '湿度 (%)', color: '#38bdf8', font: { weight: 'bold' } },
+                                grid: { drawOnChartArea: false }, // 避免网格线与温度重叠冲突
+                                ticks: { color: '#64748b' },
+                                min: 0,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+
+            } catch (err) {
+                console.error("生成图表失败:", err);
+            }
+        }
+    </script>
+</body>
+</html>

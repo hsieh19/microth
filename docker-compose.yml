@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  ths-monitor:
+    build: ./server
+    container_name: ths-monitor
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      # 持久化挂载 SQLite 数据文件及滚动日志文件夹，防容器销毁丢失
+      - ./server/data:/app/data
+      - ./server/logs:/app/logs
+    environment:
+      # 在此配置后端上报密钥 (需与 ESP32 固件端 API_KEY 匹配)
+      - API_KEY=your-32-char-secret-key-here
+      # 在此配置飞书自定义机器人 Webhook URL
+      - FEISHU_WEBHOOK=

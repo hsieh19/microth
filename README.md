@@ -6,7 +6,8 @@
 ```
 microth/
 ├── firmware/         # ESP32-C3 采集端固件代码
-│   └── README.md
+│   ├── README.md     # 固件部署说明
+│   └── monitor/      # 固件源码目录 (包含 monitor.ino, config.h 等)
 ├── server/           # Python 后端程序及可视化前端
 │   └── README.md
 └── 基于 ESP32-C3 与 Python 的轻量化温湿度远程监控系统 v2.0.md  # 详细设计方案 v2.0
