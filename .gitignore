@@ -35,3 +35,8 @@ html/
 Thumbs.db
 .vscode/
 .idea/
+
+# 环境变量及本地配置文件
+.env
+*.env
+server/data/
