@@ -33,4 +33,10 @@ const int HTTP_TIMEOUT_MS = 4000;
 const int I2C_SDA_PIN = 8;
 const int I2C_SCL_PIN = 9;
 
+// ==================== 传感器最新读数全局缓存 (供网页展示) ====================
+extern float global_last_temp;
+extern float global_last_humi;
+extern bool global_sensor_ready;
+extern unsigned long global_last_read_time;
+
 #endif // CONFIG_H

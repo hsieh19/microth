@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     ALERT_COOLDOWN_SEC: int = 1800
 
     # 时序历史数据保留天数
-    DATA_RETENTION_DAYS: int = 90
+    DATA_RETENTION_DAYS: int = 730
+
+    # 设备数据上报周期 (秒)，默认 60 秒
+    REPORT_INTERVAL_SEC: int = 60
 
     # 支持通过环境变量加载配置，同时支持从当前目录下的 .env 文件中加载
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
@@ -36,3 +39,36 @@ def ensure_directories():
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
     os.makedirs("logs", exist_ok=True)
+
+def save_settings_to_env(
+    api_key: str, 
+    feishu_webhook: str, 
+    temp_alert: float, 
+    humi_alert: float, 
+    cooldown: int, 
+    retention: int, 
+    report_interval: int
+):
+    """
+    保存最新配置到本地 .env 文件并动态更新内存中的 settings 对象。
+    """
+    settings.API_KEY = api_key
+    settings.FEISHU_WEBHOOK = feishu_webhook
+    settings.TEMP_ALERT_THRESHOLD = temp_alert
+    settings.HUMI_ALERT_THRESHOLD = humi_alert
+    settings.ALERT_COOLDOWN_SEC = cooldown
+    settings.DATA_RETENTION_DAYS = retention
+    settings.REPORT_INTERVAL_SEC = report_interval
+
+    env_content = f"""# 系统自动更新的配置
+API_KEY={api_key}
+FEISHU_WEBHOOK={feishu_webhook}
+TEMP_ALERT_THRESHOLD={temp_alert}
+HUMI_ALERT_THRESHOLD={humi_alert}
+ALERT_COOLDOWN_SEC={cooldown}
+DATA_RETENTION_DAYS={retention}
+REPORT_INTERVAL_SEC={report_interval}
+DB_PATH={settings.DB_PATH}
+"""
+    with open(".env", "w", encoding="utf-8") as f:
+        f.write(env_content)

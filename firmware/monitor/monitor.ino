@@ -19,6 +19,12 @@ unsigned long global_report_interval_ms;
 // 记录上一次数据上报的时间戳
 unsigned long last_report_time = 0;
 
+// ==================== 传感器最新读数全局缓存定义 ====================
+float global_last_temp = 0.0f;
+float global_last_humi = 0.0f;
+bool global_sensor_ready = false;
+unsigned long global_last_read_time = 0;
+
 /**
  * @brief 初始化硬件看门狗 (WDT)
  * 兼容旧版 (Core 2.x) 与新版 (Core 3.0+) Arduino ESP32 库
@@ -63,6 +69,15 @@ void setup() {
 
     // 3. 初始化 SHT40 传感器 (I2C)
     Sensor::init();
+    // 开机预读取一次传感器，让 Web 配置页能立刻显示读数
+    float temp_init = 0.0f;
+    float humi_init = 0.0f;
+    if (Sensor::read(&temp_init, &humi_init)) {
+        global_last_temp = temp_init;
+        global_last_humi = humi_init;
+        global_sensor_ready = true;
+        global_last_read_time = millis();
+    }
 
     // 4. 初始化 Wi-Fi 自愈与状态机 (触发 STA 首次连接流程)
     WiFiHeal::init();
@@ -98,6 +113,12 @@ void loop() {
         if (Sensor::read(&temp, &humi)) {
             Serial.printf("[Loop] 传感器采集成功: 温度: %.2f °C, 湿度: %.2f %%\n", temp, humi);
             
+            // 更新全局缓存供 Web 页展示
+            global_last_temp = temp;
+            global_last_humi = humi;
+            global_sensor_ready = true;
+            global_last_read_time = millis();
+
             // 上报数据 (如果 Wi-Fi 连接则上报，否则会缓存等待下个周期)
             HttpClient::post_data(temp, humi);
         } else {

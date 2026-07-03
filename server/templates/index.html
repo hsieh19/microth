@@ -44,14 +44,15 @@
             backdrop-filter: blur(8px);
             border-bottom: 1px solid var(--glass-border);
             position: relative;
+            z-index: 10;
         }
         
         header::after {
             content: '';
             position: absolute;
             bottom: -1px;
-            left: 10%;
-            width: 80%;
+            left: 5%;
+            width: 90%;
             height: 1px;
             background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
         }
@@ -66,6 +67,7 @@
             font-size: 24px;
             background: linear-gradient(135deg, #38bdf8 0%, #0369a1 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.4));
         }
@@ -77,17 +79,89 @@
             letter-spacing: 0.5px;
         }
 
-        /* 主体布局 */
-        main {
+        /* 左右分栏主体布局 */
+        .app-layout {
             flex: 1;
-            max-width: 1200px;
+            display: flex;
+            flex-direction: row;
             width: 100%;
-            margin: 0 auto;
-            padding: 30px 20px;
+            min-height: calc(100vh - 81px);
+        }
+
+        /* 侧边菜单栏 */
+        .sidebar {
+            width: 240px;
+            background: rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(16px);
+            border-right: 1px solid var(--glass-border);
+            padding: 30px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
             box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
+            font-weight: 500;
+        }
+
+        .menu-item:hover {
+            color: var(--text-primary);
+            background: rgba(56, 189, 248, 0.08);
+            border-color: rgba(56, 189, 248, 0.15);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.05);
+        }
+
+        .menu-item.active {
+            color: var(--neon-blue);
+            background: rgba(56, 189, 248, 0.12);
+            border-color: rgba(56, 189, 248, 0.3);
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(56, 189, 248, 0.2);
+            font-weight: 600;
+        }
+
+        .menu-item i {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* 主内容显示栏 */
+        .main-content {
+            flex: 1;
+            padding: 30px 40px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
             display: flex;
             flex-direction: column;
             gap: 24px;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         /* 控制栏面板 */
@@ -98,17 +172,18 @@
             border-radius: 16px;
             padding: 16px 24px;
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start;
             align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
+            flex-wrap: nowrap;
+            gap: 12px;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
         }
 
         .selector-group {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
+            flex-shrink: 0;
         }
 
         label {
@@ -137,6 +212,18 @@
             box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
         }
 
+        optgroup {
+            background: #0f172a;
+            color: var(--neon-blue);
+            font-weight: 600;
+        }
+
+        option {
+            background: #0f172a;
+            color: var(--text-primary);
+            font-weight: normal;
+        }
+
         .btn-group {
             display: flex;
             gap: 8px;
@@ -144,6 +231,7 @@
             padding: 4px;
             border-radius: 12px;
             border: 1px solid var(--glass-border);
+            flex-shrink: 0;
         }
 
         .btn-group button {
@@ -310,6 +398,180 @@
             width: 100%;
         }
 
+        /* 系统设置与注册面板 */
+        .settings-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(16px);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.25);
+        }
+
+        .settings-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 16px;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input:focus {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+        }
+
+        .form-group.full-width {
+            grid-column: span 2;
+        }
+
+        .btn-save {
+            background: var(--neon-blue);
+            color: #0f172a;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            align-self: flex-start;
+        }
+
+        .btn-save:hover {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-save:active {
+            transform: translateY(0);
+        }
+
+        /* 磨砂玻璃表格样式 */
+        .glass-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            color: var(--text-primary);
+        }
+
+        .glass-table th, .glass-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .glass-table th {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(15, 23, 42, 0.3);
+        }
+
+        .glass-table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .btn-delete-neon {
+            background: rgba(244, 63, 94, 0.15);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            color: var(--neon-rose);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-delete-neon:hover {
+            background: var(--neon-rose);
+            color: #0f172a;
+            box-shadow: 0 0 10px rgba(244, 63, 94, 0.4);
+        }
+
+        .btn-edit-neon {
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            color: var(--neon-blue);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-edit-neon:hover {
+            background: var(--neon-blue);
+            color: #0f172a;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+        }
+
+        /* 历史表格自定义滚动条 */
+        #historyTableContainer::-webkit-scrollbar {
+            width: 6px;
+        }
+        #historyTableContainer::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        #historyTableContainer::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.3);
+            border-radius: 3px;
+        }
+        #historyTableContainer::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.5);
+        }
+
         footer {
             text-align: center;
             padding: 20px;
@@ -336,7 +598,83 @@
             color: rgba(255, 255, 255, 0.1);
         }
 
+        .custom-range-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            flex-shrink: 0;
+        }
+
+        .custom-range-group input {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            outline: none;
+            color-scheme: dark;
+            transition: all 0.2s ease;
+            width: 160px;
+        }
+
+        .custom-range-group input:focus {
+            border-color: var(--neon-blue);
+        }
+
+        .btn-search {
+            background: var(--neon-blue);
+            color: #0f172a;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-search:hover {
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-search:active {
+            transform: translateY(0);
+        }
+
         /* 移动端排版优化 */
+        @media (max-width: 900px) {
+            .app-layout {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--glass-border);
+                flex-direction: row;
+                justify-content: space-around;
+                padding: 12px 16px;
+                min-height: auto;
+            }
+            .main-content {
+                padding: 20px 16px;
+            }
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .form-group.full-width {
+                grid-column: span 1;
+            }
+            #device-view > div {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
         @media (max-width: 768px) {
             header {
                 padding: 15px 20px;
@@ -352,8 +690,10 @@
             .btn-group {
                 justify-content: center;
             }
-            main {
-                padding: 15px 10px;
+            .custom-range-group {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
             }
         }
     </style>
@@ -369,95 +709,257 @@
         </div>
     </header>
 
-    <main>
-        <!-- 筛选与控制栏 -->
-        <div class="control-panel">
-            <div class="selector-group">
-                <div>
-                    <label for="deviceSelect">监控目标设备</label>
-                    <select id="deviceSelect" style="margin-top: 6px; width: 100%;">
-                        <option value="">-- 请选择设备 --</option>
-                    </select>
-                </div>
+    <div class="app-layout">
+        <!-- 左侧菜单栏 -->
+        <aside class="sidebar">
+            <div class="menu-item active" data-tab="data-view">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>数据查看</span>
             </div>
-            
-            <div class="btn-group" id="timeRangeGroup">
-                <button data-days="1" class="active">最近24小时</button>
-                <button data-days="7">最近7天</button>
-                <button data-days="30">最近30天</button>
+            <div class="menu-item" data-tab="device-view">
+                <i class="fa-solid fa-server"></i>
+                <span>设备注册</span>
             </div>
-        </div>
+            <div class="menu-item" data-tab="settings-view">
+                <i class="fa-solid fa-gear"></i>
+                <span>系统设置</span>
+            </div>
+        </aside>
 
-        <!-- 实时卡片组 -->
-        <div class="cards-grid">
-            <!-- 温度实时展示 -->
-            <div class="card temp-card">
-                <div class="card-header">
-                    <span class="card-title">实时环境温度</span>
-                    <i class="fa-solid fa-temperature-half card-icon"></i>
+        <!-- 右侧显示栏 -->
+        <main class="main-content">
+            <!-- TAB 1: 数据查看 -->
+            <div id="data-view" class="tab-content active">
+                <!-- 筛选与控制栏 -->
+                <div class="control-panel">
+                    <div class="selector-group">
+                        <label for="deviceSelect" style="margin: 0; white-space: nowrap;">监控目标设备</label>
+                        <select id="deviceSelect" style="min-width: 120px;">
+                            <option value="">-- 请选择设备 --</option>
+                        </select>
+                    </div>
+                    
+                    <div class="btn-group" id="timeRangeGroup">
+                        <button data-days="1" class="active">最近24小时</button>
+                        <button data-days="7">最近7天</button>
+                        <button data-days="30">最近30天</button>
+                    </div>
+                    
+                    <div class="custom-range-group">
+                        <span style="font-size: 13px; color: var(--text-secondary); font-weight: 500; white-space: nowrap;">自定义：</span>
+                        <input type="datetime-local" id="startDate">
+                        <span style="font-size: 12px; color: var(--text-secondary);">至</span>
+                        <input type="datetime-local" id="endDate">
+                        <button class="btn-search" id="btnCustomSearch">查询</button>
+                    </div>
                 </div>
-                <div class="card-value" id="latestTemp">--<span class="card-unit">°C</span></div>
-                <div class="card-footer">
-                    <span class="status-dot" id="tempDot"></span>
-                    <span id="tempStatus">无数据</span>
+
+                <!-- 实时卡片组 -->
+                <div class="cards-grid">
+                    <!-- 温度实时展示 -->
+                    <div class="card temp-card">
+                        <div class="card-header">
+                            <span class="card-title">实时环境温度</span>
+                            <i class="fa-solid fa-temperature-half card-icon"></i>
+                        </div>
+                        <div class="card-value" id="latestTemp">--<span class="card-unit">°C</span></div>
+                        <div class="card-footer">
+                            <span class="status-dot" id="tempDot"></span>
+                            <span id="tempStatus">无数据</span>
+                        </div>
+                    </div>
+
+                    <!-- 湿度实时展示 -->
+                    <div class="card humi-card">
+                        <div class="card-header">
+                            <span class="card-title">实时环境湿度</span>
+                            <i class="fa-solid fa-droplet card-icon"></i>
+                        </div>
+                        <div class="card-value" id="latestHumi">--<span class="card-unit">%</span></div>
+                        <div class="card-footer">
+                            <span class="status-dot" id="humiDot"></span>
+                            <span id="humiStatus">无数据</span>
+                        </div>
+                    </div>
+
+                    <!-- 上报时效展示 -->
+                    <div class="card time-card">
+                        <div class="card-header">
+                            <span class="card-title">最后更新时间</span>
+                            <i class="fa-solid fa-clock-rotate-left card-icon"></i>
+                        </div>
+                        <div class="card-value" id="updateTime" style="font-size: 26px; line-height: 48px; font-weight: 600; color: #e2e8f0; text-shadow:none;">--:--:--</div>
+                        <div class="card-footer">
+                            <span class="status-dot dot-green" style="animation: pulse-green 3s infinite;"></span>
+                            <span id="reportIntervalText">上报周期：--秒 (Ajax轮询中)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 历史图表 -->
+                <div class="chart-panel">
+                    <div class="chart-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="chart-title">
+                            <i class="fa-solid fa-chart-line" style="color: var(--neon-blue)"></i>
+                            <span>温湿度历史数据查看</span>
+                        </div>
+                        <div class="btn-group" id="viewModeGroup">
+                            <button class="active" data-mode="chart" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-chart-line" style="margin-right: 4px;"></i>趋势图</button>
+                            <button data-mode="table" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-table" style="margin-right: 4px;"></i>数据表</button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="historyChart"></canvas>
+                        
+                        <!-- 历史表格容器 -->
+                        <div id="historyTableContainer" style="display: none; height: 100%; overflow-y: auto; background: rgba(15, 23, 42, 0.45); border: 1px solid var(--glass-border); border-radius: 12px;">
+                            <table class="glass-table" style="margin-top: 0; width: 100%;">
+                                <thead style="position: sticky; top: 0; z-index: 2; background: #0f172a;">
+                                    <tr>
+                                        <th>采集时间</th>
+                                        <th>温度 (°C)</th>
+                                        <th>湿度 (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody">
+                                    <!-- 动态数据 -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="empty-state" id="chartEmptyState">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                            <p>请选择一个活跃设备以加载历史趋势曲线图</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- 湿度实时展示 -->
-            <div class="card humi-card">
-                <div class="card-header">
-                    <span class="card-title">实时环境湿度</span>
-                    <i class="fa-solid fa-droplet card-icon"></i>
-                </div>
-                <div class="card-value" id="latestHumi">--<span class="card-unit">%</span></div>
-                <div class="card-footer">
-                    <span class="status-dot" id="humiDot"></span>
-                    <span id="humiStatus">无数据</span>
+            <!-- TAB 2: 设备注册 -->
+            <div id="device-view" class="tab-content">
+                <div style="display: grid; grid-template-columns: 350px 1fr; gap: 24px; align-items: start;">
+                    <!-- 左侧：注册表单 -->
+                    <div class="settings-card" style="padding: 24px;">
+                        <div class="settings-title" style="font-size: 16px; margin-bottom: 18px; padding-bottom: 12px; color: var(--neon-blue);">
+                            <i class="fa-solid fa-plus-circle"></i>
+                            <span>注册与更新设备</span>
+                        </div>
+                        <form id="registerForm" style="display: flex; flex-direction: column; gap: 16px;">
+                            <div class="form-group">
+                                <label for="regDeviceId">设备 ID</label>
+                                <input type="text" id="regDeviceId" placeholder="" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="regDeviceName">设备别名</label>
+                                <input type="text" id="regDeviceName" placeholder="">
+                            </div>
+                            <div class="form-group">
+                                <label for="regGroupName">所属分组</label>
+                                <input type="text" id="regGroupName" placeholder="" list="groupDatalist">
+                                <datalist id="groupDatalist"></datalist>
+                            </div>
+                            <div style="display: flex; gap: 12px; margin-top: 10px;">
+                                <button type="submit" class="btn-save" id="btnRegisterSubmit" style="flex: 1; padding: 14px 20px; justify-content: center; align-items: center;">
+                                    <i class="fa-solid fa-floppy-disk"></i>
+                                    <span id="btnRegisterSubmitText">注册设备</span>
+                                </button>
+                                <button type="button" id="btnCancelEdit" style="display: none; flex: 1; padding: 14px 20px; border-radius: 12px; font-size: 15px; font-weight: 700; align-items: center; justify-content: center; gap: 6px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--neon-rose); cursor: pointer; transition: all 0.2s ease;">
+                                    <i class="fa-solid fa-xmark"></i>
+                                    <span>取消</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- 右侧：注册列表 -->
+                    <div class="settings-card" style="padding: 24px; min-height: 400px; display: flex; flex-direction: column;">
+                        <div class="settings-title" style="font-size: 16px; margin-bottom: 18px; padding-bottom: 12px; color: var(--neon-blue);">
+                            <i class="fa-solid fa-list-check"></i>
+                            <span>已注册设备列表</span>
+                        </div>
+                        <div style="flex: 1; overflow-x: auto;">
+                            <table class="glass-table">
+                                <thead>
+                                    <tr>
+                                        <th>设备 ID</th>
+                                        <th>别名</th>
+                                        <th>所属分组</th>
+                                        <th>注册时间</th>
+                                        <th style="width: 160px; text-align: center;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="registeredDevicesTable">
+                                    <!-- 动态加载 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- 上报时效展示 -->
-            <div class="card time-card">
-                <div class="card-header">
-                    <span class="card-title">最后更新时间</span>
-                    <i class="fa-solid fa-clock-rotate-left card-icon"></i>
-                </div>
-                <div class="card-value" id="updateTime" style="font-size: 26px; line-height: 48px; font-weight: 600; color: #e2e8f0; text-shadow:none;">--:--:--</div>
-                <div class="card-footer">
-                    <span class="status-dot dot-green" style="animation: pulse-green 3s infinite;"></span>
-                    <span>上报周期：60秒 (Ajax轮询中)</span>
+            <!-- TAB 3: 系统设置 -->
+            <div id="settings-view" class="tab-content">
+                <div class="settings-card">
+                    <div class="settings-title">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>系统参数配置</span>
+                    </div>
+                    <form id="settingsForm">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="cfgApiKey">API 校验密钥</label>
+                                <input type="text" id="cfgApiKey" placeholder="用于设备上报和 API 校验的密钥">
+                            </div>
+                            <div class="form-group">
+                                <label for="cfgReportInterval">数据上报周期 (秒)</label>
+                                <input type="number" id="cfgReportInterval" placeholder="例如：60" min="1" max="86400">
+                            </div>
+                            <div class="form-group">
+                                <label for="cfgTempAlert">温度告警阈值 (°C)</label>
+                                <input type="number" step="0.1" id="cfgTempAlert" placeholder="例如：35.0" min="-50" max="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="cfgHumiAlert">湿度告警阈值 (%)</label>
+                                <input type="number" step="0.1" id="cfgHumiAlert" placeholder="例如：80.0" min="0" max="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="cfgCooldown">告警防轰炸冷却时间 (秒)</label>
+                                <input type="number" id="cfgCooldown" placeholder="例如：1800" min="1" max="86400">
+                            </div>
+                            <div class="form-group">
+                                <label for="cfgRetention">历史数据保留天数 (天)</label>
+                                <input type="number" id="cfgRetention" placeholder="例如：730" min="1" max="730">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="cfgFeishuWebhook">飞书机器人 Webhook 链接</label>
+                                <input type="text" id="cfgFeishuWebhook" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-save">
+                            <i class="fa-solid fa-check"></i>
+                            <span>保存配置</span>
+                        </button>
+                    </form>
                 </div>
             </div>
-        </div>
-
-        <!-- 历史图表 -->
-        <div class="chart-panel">
-            <div class="chart-header">
-                <div class="chart-title">
-                    <i class="fa-solid fa-chart-line" style="color: var(--neon-blue)"></i>
-                    <span>温湿度历史趋势查看</span>
-                </div>
-            </div>
-            <div class="chart-container">
-                <canvas id="historyChart"></canvas>
-                <div class="empty-state" id="chartEmptyState">
-                    <i class="fa-solid fa-circle-exclamation"></i>
-                    <p>请选择一个活跃设备以加载历史趋势曲线图</p>
-                </div>
-            </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <footer>
-        <p>轻量化远程温湿度监控系统 v2.1 | Powered by FastAPI, SQLite & Chart.js</p>
+        <p>轻量化远程温湿度监控系统 v2.3 | Powered by FastAPI, SQLite & Chart.js</p>
     </footer>
 
     <script>
         // 全局状态变量
         let currentDeviceId = "";
         let currentDays = 1;
+        let startTs = null;
+        let endTs = null;
+        let isCustomRange = false;
         let chart = null;
         let updateInterval = null;
+        let currentViewMode = "chart"; // 图表或表格切换："chart" | "table"
+        let lastHistoryData = [];      // 缓存当前拉取的历史时序数据
 
         // 获取 DOM 元素
         const deviceSelect = document.getElementById("deviceSelect");
@@ -470,10 +972,21 @@
         const humiDot = document.getElementById("humiDot");
         const chartEmptyState = document.getElementById("chartEmptyState");
         const timeRangeGroup = document.getElementById("timeRangeGroup");
+        const startDateEl = document.getElementById("startDate");
+        const endDateEl = document.getElementById("endDate");
+        const btnCustomSearch = document.getElementById("btnCustomSearch");
+        const reportIntervalText = document.getElementById("reportIntervalText");
+        
+        const menuItems = document.querySelectorAll(".menu-item");
+        const tabContents = document.querySelectorAll(".tab-content");
+        const settingsForm = document.getElementById("settingsForm");
+        const registerForm = document.getElementById("registerForm");
 
         // 页面初始化
         window.addEventListener("DOMContentLoaded", async () => {
             await loadDevices();
+            await loadSettings();
+            await loadRegisteredDevicesTable();
             setupEventListeners();
             
             // 每 30 秒更新一次设备下拉列表，方便自动发现新设备
@@ -494,6 +1007,8 @@
                     updateInterval = setInterval(refreshLatestData, 60000);
                 } else {
                     chartEmptyState.style.display = "block";
+                    document.getElementById("historyTableContainer").style.display = "none";
+                    document.getElementById("historyChart").style.display = "block";
                     resetCardValues();
                     if (chart) {
                         chart.destroy();
@@ -503,7 +1018,7 @@
                 }
             });
 
-            // 时间段筛选按钮切换
+            // 时间段快捷按钮切换
             timeRangeGroup.addEventListener("click", async (e) => {
                 if (e.target.tagName === "BUTTON") {
                     // 按钮激活状态变更
@@ -511,18 +1026,303 @@
                     buttons.forEach(btn => btn.classList.remove("active"));
                     e.target.classList.add("active");
 
+                    // 清空自定义时间
+                    startDateEl.value = "";
+                    endDateEl.value = "";
+                    isCustomRange = false;
+
                     currentDays = parseInt(e.target.dataset.days);
                     if (currentDeviceId) {
                         await drawChart();
                     }
                 }
             });
+
+            // 自定义日期段查询
+            btnCustomSearch.addEventListener("click", async () => {
+                if (!currentDeviceId) {
+                    alert("请先选择监控目标设备！");
+                    return;
+                }
+                const startVal = startDateEl.value;
+                const endVal = endDateEl.value;
+                if (!startVal || !endVal) {
+                    alert("请选择完整的开始时间和结束时间！");
+                    return;
+                }
+
+                const start = Math.floor(new Date(startVal).getTime() / 1000);
+                const end = Math.floor(new Date(endVal).getTime() / 1000);
+
+                if (start >= end) {
+                    alert("开始时间必须早于结束时间！");
+                    return;
+                }
+
+                // 取消快捷天数按钮激活状态
+                const buttons = timeRangeGroup.querySelectorAll("button");
+                buttons.forEach(btn => btn.classList.remove("active"));
+
+                startTs = start;
+                endTs = end;
+                isCustomRange = true;
+
+                await drawChart();
+            });
+
+            // 侧边栏菜单切换
+            menuItems.forEach(item => {
+                item.addEventListener("click", () => {
+                    const tabId = item.dataset.tab;
+                    
+                    menuItems.forEach(m => m.classList.remove("active"));
+                    item.classList.add("active");
+                    
+                    tabContents.forEach(t => t.classList.remove("active"));
+                    document.getElementById(tabId).classList.add("active");
+                    
+                    // 如果切换到设备注册，主动加载刷新一次表格
+                    if (tabId === "device-view") {
+                        loadRegisteredDevicesTable();
+                    }
+                    
+                    // 如果是数据查看页面，可能需要重绘图表以保证大小正确
+                    if (tabId === "data-view" && currentDeviceId) {
+                        setTimeout(() => {
+                            if (chart) {
+                                chart.resize();
+                            } else {
+                                drawChart();
+                            }
+                        }, 50);
+                    }
+                });
+            });
+
+            // 趋势图 / 数据表切换
+            const viewModeGroup = document.getElementById("viewModeGroup");
+            viewModeGroup.addEventListener("click", (e) => {
+                const btn = e.target.closest("button");
+                if (!btn) return;
+                
+                const buttons = viewModeGroup.querySelectorAll("button");
+                buttons.forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                
+                const mode = btn.dataset.mode;
+                currentViewMode = mode;
+                
+                const chartCanvas = document.getElementById("historyChart");
+                const tableContainer = document.getElementById("historyTableContainer");
+                
+                // 如果当前没有活跃设备，不需要处理显隐切换
+                if (!currentDeviceId) return;
+                
+                if (mode === "chart") {
+                    tableContainer.style.display = "none";
+                    chartCanvas.style.display = "block";
+                    if (chart) {
+                        chart.resize();
+                    }
+                } else {
+                    chartCanvas.style.display = "none";
+                    tableContainer.style.display = "block";
+                    renderHistoryTable(lastHistoryData);
+                }
+            });
+
+            // 系统设置保存
+            settingsForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                
+                const apiKey = document.getElementById("cfgApiKey").value.trim();
+                const feishuWebhook = document.getElementById("cfgFeishuWebhook").value.trim();
+                const tempAlert = parseFloat(document.getElementById("cfgTempAlert").value);
+                const humiAlert = parseFloat(document.getElementById("cfgHumiAlert").value);
+                const cooldown = parseInt(document.getElementById("cfgCooldown").value);
+                const retention = parseInt(document.getElementById("cfgRetention").value);
+                const reportInterval = parseInt(document.getElementById("cfgReportInterval").value);
+                
+                if (!apiKey) {
+                    alert("API 校验密钥不能为空！");
+                    return;
+                }
+                if (isNaN(tempAlert) || tempAlert < -50 || tempAlert > 100) {
+                    alert("温度阈值需在 -50 至 100 之间！");
+                    return;
+                }
+                if (isNaN(humiAlert) || humiAlert < 0 || humiAlert > 100) {
+                    alert("湿度阈值需在 0 至 100 之间！");
+                    return;
+                }
+                if (isNaN(cooldown) || cooldown < 1 || cooldown > 86400) {
+                    alert("冷却时间需在 1 至 86400 秒之间！");
+                    return;
+                }
+                if (isNaN(retention) || retention < 1 || retention > 730) {
+                    alert("数据保留天数需在 1 至 730 天之间！");
+                    return;
+                }
+                if (isNaN(reportInterval) || reportInterval < 1 || reportInterval > 86400) {
+                    alert("上报周期需在 1 至 86400 秒之间！");
+                    return;
+                }
+                
+                const data = {
+                    api_key: apiKey,
+                    feishu_webhook: feishuWebhook,
+                    temp_alert_threshold: tempAlert,
+                    humi_alert_threshold: humiAlert,
+                    alert_cooldown_sec: cooldown,
+                    data_retention_days: retention,
+                    report_interval_sec: reportInterval
+                };
+                
+                try {
+                    const btn = settingsForm.querySelector(".btn-save");
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 保存中...';
+                    
+                    const res = await fetch("/api/settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    if (!res.ok) throw new Error("保存配置失败");
+                    
+                    alert("系统配置保存成功！");
+                    await loadSettings();
+                    
+                } catch (err) {
+                    console.error("保存配置出错:", err);
+                    alert("保存配置出错: " + err.message);
+                } finally {
+                    const btn = settingsForm.querySelector(".btn-save");
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> 保存配置';
+                }
+            });
+
+            // 编辑更新状态管理
+            let isEditMode = false;
+
+            function editDevice(deviceId, deviceName, groupName) {
+                isEditMode = true;
+                
+                const regDeviceId = document.getElementById("regDeviceId");
+                regDeviceId.value = deviceId;
+                regDeviceId.disabled = true; // 锁定主键 ID
+                
+                document.getElementById("regDeviceName").value = deviceName;
+                document.getElementById("regGroupName").value = groupName;
+                
+                document.getElementById("btnRegisterSubmitText").textContent = "更新配置";
+                const submitBtn = document.getElementById("btnRegisterSubmit");
+                submitBtn.querySelector("i").className = "fa-solid fa-pen-to-square";
+                
+                document.getElementById("btnCancelEdit").style.display = "flex";
+            }
+
+            function cancelEdit() {
+                isEditMode = false;
+                
+                const regDeviceId = document.getElementById("regDeviceId");
+                regDeviceId.value = "";
+                regDeviceId.disabled = false;
+                
+                document.getElementById("regDeviceName").value = "";
+                document.getElementById("regGroupName").value = "";
+                
+                document.getElementById("btnRegisterSubmitText").textContent = "注册设备";
+                const submitBtn = document.getElementById("btnRegisterSubmit");
+                submitBtn.querySelector("i").className = "fa-solid fa-floppy-disk";
+                
+                document.getElementById("btnCancelEdit").style.display = "none";
+            }
+
+            window.editDevice = editDevice;
+            window.cancelEdit = cancelEdit;
+
+            document.getElementById("btnCancelEdit").addEventListener("click", cancelEdit);
+
+            // 新设备注册与更新表单提交
+            registerForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                // 即使被 disabled，也可以通过 regDeviceId.value 拿到已填充的值
+                const devId = document.getElementById("regDeviceId").value.trim();
+                const devName = document.getElementById("regDeviceName").value.trim();
+                const groupName = document.getElementById("regGroupName").value.trim() || "默认分组";
+                
+                if (!devId) {
+                    alert("设备 ID 不能为空！");
+                    return;
+                }
+                if (!/^[a-zA-Z0-9_\-]+$/.test(devId)) {
+                    alert("设备 ID 只允许包含字母、数字、下划线和连字符！");
+                    return;
+                }
+                
+                const payload = {
+                    device_id: devId,
+                    device_name: devName,
+                    group_name: groupName
+                };
+                
+                try {
+                    const btn = document.getElementById("btnRegisterSubmit");
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${isEditMode ? '更新中...' : '注册中...'}`;
+                    
+                    const res = await fetch("/api/devices/registered", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!res.ok) throw new Error(isEditMode ? "更新设备失败" : "注册设备失败");
+                    
+                    alert(isEditMode ? "设备配置更新成功！" : "设备注册成功！");
+                    cancelEdit(); // 退出并清空编辑状态
+                    
+                    // 重新拉取设备和表格数据
+                    await loadDevices();
+                    await loadRegisteredDevicesTable();
+                    
+                } catch (err) {
+                    console.error("操作出错:", err);
+                    alert("操作出错: " + err.message);
+                } finally {
+                    const btn = document.getElementById("btnRegisterSubmit");
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="fa-solid ${isEditMode ? 'fa-pen-to-square' : 'fa-floppy-disk'}"></i> <span id="btnRegisterSubmitText">${isEditMode ? '更新配置' : '注册设备'}</span>`;
+                }
+            });
         }
 
-        // 加载所有活跃设备列表
+        // 加载当前系统配置并回显
+        async function loadSettings() {
+            try {
+                const res = await fetch("/api/settings");
+                if (!res.ok) throw new Error("加载设置接口失败");
+                const config = await res.json();
+                
+                document.getElementById("cfgApiKey").value = config.api_key || "";
+                document.getElementById("cfgFeishuWebhook").value = config.feishu_webhook || "";
+                document.getElementById("cfgTempAlert").value = config.temp_alert_threshold || "";
+                document.getElementById("cfgHumiAlert").value = config.humi_alert_threshold || "";
+                document.getElementById("cfgCooldown").value = config.alert_cooldown_sec || "";
+                document.getElementById("cfgRetention").value = config.data_retention_days || "";
+                document.getElementById("cfgReportInterval").value = config.report_interval_sec || "";
+            } catch (err) {
+                console.error("获取系统配置失败:", err);
+            }
+        }
+
+        // 加载所有已注册固件设备列表，并按分组渲染下拉框
         async function loadDevices() {
             try {
-                const res = await fetch("/api/devices");
+                const res = await fetch("/api/devices/registered");
                 if (!res.ok) throw new Error("获取设备列表失败");
                 const devices = await res.json();
                 
@@ -531,20 +1331,50 @@
                 
                 // 渲染 Option 项
                 deviceSelect.innerHTML = '<option value="">-- 选择设备 --</option>';
-                devices.forEach(device => {
-                    const option = document.createElement("option");
-                    option.value = device;
-                    option.textContent = device;
-                    deviceSelect.appendChild(option);
+                
+                // 按 group_name 分组
+                const groups = {};
+                devices.forEach(dev => {
+                    const g = dev.group_name || "默认分组";
+                    if (!groups[g]) {
+                        groups[g] = [];
+                    }
+                    groups[g].push(dev);
+                });
+
+                // 更新分组提示联想列表
+                const groupDatalist = document.getElementById("groupDatalist");
+                if (groupDatalist) {
+                    groupDatalist.innerHTML = "";
+                    Object.keys(groups).forEach(gName => {
+                        const opt = document.createElement("option");
+                        opt.value = gName;
+                        groupDatalist.appendChild(opt);
+                    });
+                }
+
+                // 树形分组插入下拉框
+                Object.keys(groups).forEach(gName => {
+                    const optgroup = document.createElement("optgroup");
+                    optgroup.label = gName;
+                    
+                    groups[gName].forEach(dev => {
+                        const option = document.createElement("option");
+                        option.value = dev.device_id;
+                        option.textContent = dev.device_name ? `${dev.device_name} (${dev.device_id})` : dev.device_id;
+                        optgroup.appendChild(option);
+                    });
+                    deviceSelect.appendChild(optgroup);
                 });
 
                 // 恢复先前选中的项
-                if (devices.includes(prevSelected)) {
+                const allIds = devices.map(d => d.device_id);
+                if (allIds.includes(prevSelected)) {
                     deviceSelect.value = prevSelected;
                 } else if (devices.length > 0 && !prevSelected) {
                     // 默认选择第一台设备
-                    deviceSelect.value = devices[0];
-                    currentDeviceId = devices[0];
+                    deviceSelect.value = devices[0].device_id;
+                    currentDeviceId = devices[0].device_id;
                     chartEmptyState.style.display = "none";
                     refreshDashboard();
                     
@@ -556,6 +1386,79 @@
             }
         }
 
+        // 加载已注册设备表格列表
+        async function loadRegisteredDevicesTable() {
+            try {
+                const res = await fetch("/api/devices/registered");
+                if (!res.ok) throw new Error("获取注册设备列表失败");
+                const devices = await res.json();
+                
+                const tableBody = document.getElementById("registeredDevicesTable");
+                tableBody.innerHTML = "";
+                
+                if (devices.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 30px;">暂无已注册设备</td></tr>';
+                    return;
+                }
+                
+                devices.forEach(dev => {
+                    const dateStr = new Date(dev.created_at * 1000).toLocaleString('zh-CN', { hour12: false });
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td style="font-weight: 600; color: var(--neon-blue);">${dev.device_id}</td>
+                        <td>${dev.device_name || '<span style="color: var(--text-secondary);">未命名</span>'}</td>
+                        <td><span style="background: rgba(56, 189, 248, 0.1); color: var(--neon-blue); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 500;">${dev.group_name}</span></td>
+                        <td style="font-size: 13px; color: var(--text-secondary);">${dateStr}</td>
+                        <td style="text-align: center; white-space: nowrap;">
+                            <button class="btn-edit-neon" onclick="editDevice('${dev.device_id}', '${dev.device_name || ""}', '${dev.group_name || ""}')" style="margin-right: 8px;">
+                                <i class="fa-solid fa-pen-to-square"></i> 编辑
+                            </button>
+                            <button class="btn-delete-neon" onclick="deleteDevice('${dev.device_id}')">
+                                <i class="fa-solid fa-trash-can"></i> 注销
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error("加载注册设备表格失败:", err);
+            }
+        }
+
+        // 删除注销设备函数
+        async function deleteDevice(deviceId) {
+            if (!confirm(`确定要注销设备 ${deviceId} 吗？\n注销后该设备的数据上报将被服务器拦截拒绝！`)) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/devices/registered/${deviceId}`, {
+                    method: "DELETE"
+                });
+                
+                if (!res.ok) throw new Error("注销设备失败");
+                
+                alert("设备注销成功！");
+                
+                // 重新刷新列表与下拉框
+                await loadDevices();
+                await loadRegisteredDevicesTable();
+                
+                // 如果刚好选中的是该设备，清空并切回空状态
+                if (currentDeviceId === deviceId) {
+                    deviceSelect.value = "";
+                    deviceSelect.dispatchEvent(new Event("change"));
+                }
+                
+            } catch (err) {
+                console.error("注销设备出错:", err);
+                alert("注销设备出错: " + err.message);
+            }
+        }
+
+        // 把删除函数挂载到全局 window 命名空间
+        window.deleteDevice = deleteDevice;
+
         // 重置实时卡片数值
         function resetCardValues() {
             latestTempEl.innerHTML = '--<span class="card-unit">°C</span>';
@@ -565,6 +1468,7 @@
             humiStatusEl.textContent = '无数据';
             tempDot.className = 'status-dot';
             humiDot.className = 'status-dot';
+            reportIntervalText.textContent = '上报周期：--秒 (Ajax轮询中)';
         }
 
         // 统一刷新大屏 (刷新最新数据 + 刷新图表)
@@ -587,7 +1491,7 @@
                 
                 // 渲染实时温度
                 latestTempEl.innerHTML = `${data.temp.toFixed(1)}<span class="card-unit">°C</span>`;
-                if (data.temp > 35) {
+                if (data.temp > (parseFloat(document.getElementById("cfgTempAlert").value) || 35)) {
                     tempStatusEl.textContent = "温度超标 (异常)";
                     tempDot.className = "status-dot dot-red";
                 } else {
@@ -597,7 +1501,7 @@
 
                 // 渲染实时湿度
                 latestHumiEl.innerHTML = `${data.humi.toFixed(1)}<span class="card-unit">%</span>`;
-                if (data.humi > 80) {
+                if (data.humi > (parseFloat(document.getElementById("cfgHumiAlert").value) || 80)) {
                     humiStatusEl.textContent = "湿度超标 (异常)";
                     humiDot.className = "status-dot dot-red";
                 } else {
@@ -609,27 +1513,80 @@
                 const date = new Date(data.ts * 1000);
                 updateTimeEl.textContent = date.toLocaleTimeString('zh-CN', { hour12: false });
                 
+                // 渲染估算出的上报周期
+                if (data.report_interval !== undefined) {
+                    reportIntervalText.textContent = `上报周期：${data.report_interval}秒 (Ajax轮询中)`;
+                }
+                
             } catch (err) {
                 console.error("更新最新卡片数据失败:", err);
             }
         }
 
-        // 2. 渲染 Chart.js 历史时序折线图
+        // 渲染历史时序表格
+        function renderHistoryTable(data) {
+            const tbody = document.getElementById("historyTableBody");
+            tbody.innerHTML = "";
+            
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 30px;">该时段内暂无传感器历史数据</td></tr>';
+                return;
+            }
+            
+            data.forEach(item => {
+                const dateStr = new Date(item.ts * 1000).toLocaleString('zh-CN', { hour12: false });
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-size: 13px; color: var(--text-secondary);">${dateStr}</td>
+                    <td style="font-weight: 600; color: var(--neon-amber);">${item.temp.toFixed(2)} °C</td>
+                    <td style="font-weight: 600; color: var(--neon-blue);">${item.humi.toFixed(2)} %</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 2. 渲染 Chart.js 历史时序折线图 / 表格
         async function drawChart() {
             if (!currentDeviceId) return;
             try {
-                const res = await fetch(`/api/history?device_id=${currentDeviceId}&days=${currentDays}`);
+                let url = `/api/history?device_id=${currentDeviceId}`;
+                if (isCustomRange) {
+                    url += `&start_ts=${startTs}&end_ts=${endTs}`;
+                } else {
+                    url += `&days=${currentDays}`;
+                }
+
+                const res = await fetch(url);
                 if (!res.ok) throw new Error("获取历史记录失败");
                 const historyData = await res.json();
                 
+                // 缓存最新拉取的数据
+                lastHistoryData = historyData;
+                
+                const chartCanvas = document.getElementById("historyChart");
+                const tableContainer = document.getElementById("historyTableContainer");
+                
+                // 分流显隐逻辑
+                if (currentViewMode === "chart") {
+                    tableContainer.style.display = "none";
+                    chartCanvas.style.display = "block";
+                } else {
+                    chartCanvas.style.display = "none";
+                    tableContainer.style.display = "block";
+                    renderHistoryTable(historyData);
+                    return; // 表格模式渲染后直接返回，不绘制 Chart.js
+                }
+
                 const labels = [];
                 const tempValues = [];
                 const humiValues = [];
 
+                const diffSec = isCustomRange ? (endTs - startTs) : (currentDays * 86400);
+
                 historyData.forEach(item => {
                     const date = new Date(item.ts * 1000);
-                    // 24小时显示具体时分，其它天数显示月日时分
-                    if (currentDays === 1) {
+                    // 如果时间差小于等于24小时，显示具体时分；否则跨天显示月日和时分
+                    if (diffSec <= 86400) {
                         labels.push(date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }));
                     } else {
                         labels.push(`${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:00`);
@@ -653,6 +1610,9 @@
                 humiGradient.addColorStop(0, 'rgba(56, 189, 248, 0.25)');
                 humiGradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
 
+                // 自适应散点大小：如果数据点多，隐藏散点避免重叠；如果少于 100 个点，显示散点
+                const showPoint = historyData.length <= 100;
+
                 chart = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -666,7 +1626,7 @@
                                 backgroundColor: tempGradient,
                                 fill: true,
                                 tension: 0.3,
-                                pointRadius: currentDays === 1 ? 2 : 0,
+                                pointRadius: showPoint ? 2 : 0,
                                 yAxisID: 'yTemp'
                             },
                             {
@@ -677,7 +1637,7 @@
                                 backgroundColor: humiGradient,
                                 fill: true,
                                 tension: 0.3,
-                                pointRadius: currentDays === 1 ? 2 : 0,
+                                pointRadius: showPoint ? 2 : 0,
                                 yAxisID: 'yHumi'
                             }
                         ]
@@ -711,7 +1671,7 @@
                                 ticks: {
                                     color: '#64748b',
                                     font: { family: 'Inter', size: 10 },
-                                    maxTicksLimit: currentDays === 1 ? 12 : 24
+                                    maxTicksLimit: diffSec <= 86400 ? 12 : 24
                                 }
                             },
                             yTemp: {

@@ -3,6 +3,7 @@
 
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <WiFi.h>
 #include "config.h"
 #include "nvs_storage.h"
 
@@ -42,10 +43,44 @@ namespace WebConfig {
         html += "button:hover { opacity: 0.95; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(14, 165, 233, 0.45); }";
         html += "button:active { transform: translateY(0); }";
         html += ".footer { text-align: center; margin-top: 25px; font-size: 12px; color: #64748b; }";
+        html += ".sensor-container { display: flex; justify-content: space-around; align-items: center; background: rgba(15, 23, 42, 0.45); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 18px 10px; margin-bottom: 20px; }";
+        html += ".sensor-item { text-align: center; flex: 1; }";
+        html += ".sensor-separator { width: 1px; height: 36px; background: rgba(255, 255, 255, 0.08); }";
+        html += ".sensor-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }";
+        html += ".sensor-value { font-size: 26px; font-weight: 700; line-height: 1.1; }";
+        html += ".temp-color { color: #f43f5e; }";
+        html += ".humi-color { color: #38bdf8; }";
+        html += ".unit { font-size: 13px; font-weight: 500; margin-left: 2px; color: #94a3b8; }";
+        html += ".sensor-time { text-align: center; font-size: 11px; color: #64748b; margin-top: -12px; margin-bottom: 22px; }";
         html += "</style></head><body>";
         
         html += "<div class='card'>";
         html += "<h2>THS Monitor 配网与配置</h2>";
+
+        // 插入温湿度实时监视看板
+        if (global_sensor_ready) {
+            unsigned long ago_sec = (millis() - global_last_read_time) / 1000;
+            html += "<div class='sensor-container'>";
+            html += "  <div class='sensor-item'>";
+            html += "    <div class='sensor-label'>当前温度</div>";
+            html += "    <div class='sensor-value temp-color'>" + String(global_last_temp, 1) + "<span class='unit'>°C</span></div>";
+            html += "  </div>";
+            html += "  <div class='sensor-separator'></div>";
+            html += "  <div class='sensor-item'>";
+            html += "    <div class='sensor-label'>当前湿度</div>";
+            html += "    <div class='sensor-value humi-color'>" + String(global_last_humi, 1) + "<span class='unit'>%</span></div>";
+            html += "  </div>";
+            html += "</div>";
+            html += "<div class='sensor-time'>上次数据更新于：" + String(ago_sec) + " 秒前 (手动刷新网页可同步)</div>";
+        } else {
+            html += "<div class='sensor-container'>";
+            html += "  <div class='sensor-item' style='width: 100%;'>";
+            html += "    <div class='sensor-label'>当前温湿度</div>";
+            html += "    <div class='sensor-value' style='font-size: 15px; color: #94a3b8; font-weight: 500;'>⏳ 传感器准备中...</div>";
+            html += "  </div>";
+            html += "</div>";
+        }
+
         html += "<form method='POST' action='/save'>";
         
         // Wi-Fi SSID
@@ -131,33 +166,15 @@ namespace WebConfig {
     }
 
     /**
-     * @brief 启动 AP 配网服务 (AP模式 + WebServer + DNSServer)
+     * @brief 初始化 Web 路由配置。此函数需在系统启动 (setup) 阶段调用一次，避免重复注册路由。
      */
-    void start_ap_server() {
-        Serial.println("[WebConfig] 启动 AP 配网模式...");
-        
-        // 1. 设置 AP 模式 IP 地址段 (192.168.4.1)
-        IPAddress apIP(192.168.4.1);
-        IPAddress subnet(255, 255, 255, 0);
-        WiFi.softAPConfig(apIP, apIP, subnet);
-        
-        // 2. 发射 Wi-Fi 热点 (无密码，方便用户直接接入)
-        WiFi.softAP("THS-Monitor-Setup");
-        Serial.printf("[WebConfig] 热点 \"THS-Monitor-Setup\" 已启用。请用手机连接该热点，在浏览器中配置设备。\n");
-        Serial.print("[WebConfig] 本地配置 IP: ");
-        Serial.println(WiFi.softAPIP());
-
-        // 3. 启动 DNS 强制门户重定向服务 (重定向所有非 192.168.4.1 域名解析)
-        dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-        dnsServer.start(53, "*", apIP);
-
-        // 4. 定义 Web Server 接口路由
-        // 配置表单页
+    void init() {
+        // 1. 配置表单页
         server.on("/", HTTP_GET, []() {
             server.send(200, "text/html", get_html_page());
         });
 
-        // 提交表单保存接口〔S3 修复：对所有输入增加长度、范围校验〕
+        // 2. 提交表单保存接口〔S3 修复：对所有输入增加长度、范围校验〕
         server.on("/save", HTTP_POST, []() {
             String ssid   = server.arg("ssid");
             String pass   = server.arg("pass");
@@ -203,8 +220,30 @@ namespace WebConfig {
             server.send(200, "text/html", get_success_page());
             save_success = true;
         });
+    }
 
-        // 强制门户必配：捕获苹果、微软、安卓等设备检测网络连通性发出的所有随机 404 请求，统一重定向
+    /**
+     * @brief 启动 AP 配网服务 (AP模式 + WebServer + DNSServer)
+     */
+    void start_ap_server() {
+        Serial.println("[WebConfig] 启动 AP 配网模式...");
+        
+        // 1. 设置 AP 模式 IP 地址段 (192.168.4.1)
+        IPAddress apIP(192, 168, 4, 1);
+        IPAddress subnet(255, 255, 255, 0);
+        WiFi.softAPConfig(apIP, apIP, subnet);
+        
+        // 2. 发射 Wi-Fi 热点 (无密码，方便用户直接接入)
+        WiFi.softAP("THS-Monitor-Setup");
+        Serial.printf("[WebConfig] 热点 \"THS-Monitor-Setup\" 已启用。请用手机连接该热点，在浏览器中配置设备。\n");
+        Serial.print("[WebConfig] 本地配置 IP: ");
+        Serial.println(WiFi.softAPIP());
+
+        // 3. 启动 DNS 强制门户重定向服务 (重定向所有非 192.168.4.1 域名解析)
+        dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+        dnsServer.start(53, "*", apIP);
+
+        // 4. 绑定强制重定向
         server.onNotFound(handle_captive_redirect);
 
         // 5. 启动 Web 服务
@@ -213,7 +252,25 @@ namespace WebConfig {
     }
 
     /**
-     * @brief 运行 Web 服务与 DNS 服务轮询（需在 loop 中运行）
+     * @brief 启动 STA 局域网配置网页服务
+     */
+    void start_sta_server() {
+        Serial.println("[WebConfig] 启动 STA 局域网网页配置服务...");
+        Serial.print("[WebConfig] 局域网配置 URL: http://");
+        Serial.print(WiFi.localIP());
+        Serial.println("/");
+
+        // 绑定普通的 404 响应，覆盖强制重定向
+        server.onNotFound([]() {
+            server.send(404, "text/plain", "Not Found");
+        });
+
+        server.begin();
+        save_success = false;
+    }
+
+    /**
+     * @brief 运行 AP 配置下的 DNS 服务与 Web 服务轮询（需在 loop 中运行）
      * 
      * @return true 用户已提交新配置，主逻辑可以执行重启
      * @return false 正常服务运行中，暂未提交新配置
@@ -230,13 +287,37 @@ namespace WebConfig {
     }
 
     /**
-     * @brief 关闭 Web 配网服务，清空资源
+     * @brief 运行 STA 配置下的 Web 服务轮询（需在 loop 中运行）
+     * 
+     * @return true 用户已提交新配置，主逻辑可以执行重启
+     * @return false 正常服务运行中，暂未提交新配置
+     */
+    bool handle_sta() {
+        server.handleClient();
+        
+        if (save_success) {
+            delay(2000); // 留出 2 秒展示成功确认页面
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @brief 关闭 AP 配网服务，清空资源
      */
     void stop_ap_server() {
         server.stop();
         dnsServer.stop();
         WiFi.softAPdisconnect(true);
         Serial.println("[WebConfig] AP 配网服务器已关闭。");
+    }
+
+    /**
+     * @brief 关闭 STA 配置服务，释放资源
+     */
+    void stop_sta_server() {
+        server.stop();
+        Serial.println("[WebConfig] STA 配置服务器已关闭。");
     }
 }
 

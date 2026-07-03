@@ -30,6 +30,10 @@ namespace WiFiHeal {
      * @brief 切换状态并执行状态初始化动作
      */
     void transition_to(SystemState new_state) {
+        // 在切换状态前，先尝试清理上一状态开启的网络服务
+        WebConfig::stop_ap_server();
+        WebConfig::stop_sta_server();
+
         current_state = new_state;
         state_timer = millis();
         
@@ -45,6 +49,8 @@ namespace WiFiHeal {
             case STATE_STA_CONNECTED:
                 Serial.println("[WiFiState] 进入 [STA 已连接] 状态，网络正常。");
                 last_online_time = millis();
+                // 开启 STA 局域网 Web 服务器
+                WebConfig::start_sta_server();
                 break;
                 
             case STATE_AP_CONFIG:
@@ -60,6 +66,9 @@ namespace WiFiHeal {
      */
     void init() {
         Serial.println("[WiFi] 正在初始化网络自愈模块...");
+        // 1. 初始化 Web 路由注册
+        WebConfig::init();
+        // 2. 尝试首次连接
         transition_to(STATE_STA_CONNECTING);
     }
 
@@ -86,6 +95,15 @@ namespace WiFiHeal {
                     // 连接正常，持续刷新最后在线时间
                     last_online_time = now;
                     disconnect_first_detected = false; // 网络正常时重置标志
+
+                    // 轮询 STA Web 配置服务，若有新参数提交则执行重启
+                    bool config_submitted = WebConfig::handle_sta();
+                    if (config_submitted) {
+                        Serial.println("[WiFi] 局域网侦测到配网参数提交完毕，即将重启系统以应用新配置！");
+                        Serial.flush();
+                        delay(500);
+                        ESP.restart();
+                    }
                 } else {
                     // 检测到网络异常断开
                     if (!disconnect_first_detected) {

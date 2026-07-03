@@ -35,14 +35,50 @@ async def init_db():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_ts ON sensor_records (ts);")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_device_ts ON sensor_records (device_id, ts);")
         
+        # 5. 建立设备注册表
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS registered_devices (
+                device_id   TEXT    PRIMARY KEY,
+                device_name TEXT    NOT NULL DEFAULT '',
+                group_name  TEXT    NOT NULL DEFAULT '默认分组',
+                created_at  INTEGER NOT NULL
+            );
+        """)
+        
         await db.commit()
+        
+        # 6. 向后兼容性处理：若设备注册表为空，则将已有上报历史的设备自动迁移注册
+        async with db.execute("SELECT COUNT(*) FROM registered_devices") as cursor:
+            reg_count = (await cursor.fetchone())[0]
+            
+        if reg_count == 0:
+            async with db.execute("SELECT DISTINCT device_id FROM sensor_records") as cursor:
+                rows = await cursor.fetchall()
+                existing_devs = [r[0] for r in rows if r[0]]
+            
+            now_ts = int(time.time())
+            if existing_devs:
+                for dev_id in existing_devs:
+                    await db.execute(
+                        "INSERT OR IGNORE INTO registered_devices (device_id, device_name, group_name, created_at) VALUES (?, ?, ?, ?)",
+                        (dev_id, f"设备 {dev_id}", "默认分组", now_ts)
+                    )
+                print(f"[Database] 发现历史数据，已自动注册设备: {existing_devs}")
+            else:
+                await db.execute(
+                    "INSERT OR IGNORE INTO registered_devices (device_id, device_name, group_name, created_at) VALUES (?, ?, ?, ?)",
+                    ("esp32-01", "默认设备", "默认分组", now_ts)
+                )
+                print("[Database] 未检测到活跃设备，已自动注册默认设备 'esp32-01'")
+            await db.commit()
+            
     print("[Database] 数据库初始化成功，WAL 模式及索引已就绪。")
 
-async def add_record(device_id: str, temp: float, humi: float) -> int:
+async def add_record(device_id: str, temp: float, humi: float, offset_sec: int = 0) -> int:
     """
     插入一条新的传感器温湿度记录
     """
-    now_ts = int(time.time())
+    now_ts = int(time.time()) - offset_sec
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         await db.execute(
             "INSERT INTO sensor_records (device_id, ts, temp, humi) VALUES (?, ?, ?, ?)",
@@ -53,38 +89,66 @@ async def add_record(device_id: str, temp: float, humi: float) -> int:
 
 async def get_latest_record_for_device(device_id: str) -> Optional[Dict[str, Any]]:
     """
-    获取指定设备的最新一条温湿度记录
+    获取指定设备的最新一条温湿度记录，并根据相邻两条记录的时间差估算上报周期。
     """
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT device_id, temp, humi, ts FROM sensor_records WHERE device_id = ? ORDER BY ts DESC LIMIT 1",
+            "SELECT device_id, temp, humi, ts FROM sensor_records WHERE device_id = ? ORDER BY ts DESC LIMIT 2",
             (device_id,)
         ) as cursor:
-            row = await cursor.fetchone()
-            return dict(row) if row else None
+            rows = await cursor.fetchall()
+            if not rows:
+                return None
+            
+            # 第一条是最新的记录
+            latest_record = dict(rows[0])
+            
+            # 如果有相邻两条记录，则计算时间戳的差值作为上报周期
+            if len(rows) > 1:
+                ts_diff = rows[0]['ts'] - rows[1]['ts']
+                # 时间差如果合理（1秒到1天），则保留，否则用设置的默认值
+                if 1 <= ts_diff <= 86400:
+                    latest_record['report_interval'] = ts_diff
+                else:
+                    latest_record['report_interval'] = settings.REPORT_INTERVAL_SEC
+            else:
+                latest_record['report_interval'] = settings.REPORT_INTERVAL_SEC
+                
+            return latest_record
 
-async def get_history_records(device_id: str, days: int) -> List[Dict[str, Any]]:
+async def get_history_records(
+    device_id: str,
+    days: Optional[int] = None,
+    start_ts: Optional[int] = None,
+    end_ts: Optional[int] = None
+) -> List[Dict[str, Any]]:
     """
-    查询指定设备在过去 N 天内的所有温湿度时序数据，按时间升序排列 (用于 Chart.js 图表渲染)
+    查询指定设备在特定时间段内或过去 N 天内的所有温湿度时序数据，按时间升序排列
     """
-    cutoff_ts = int(time.time()) - days * 86400
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         db.row_factory = aiosqlite.Row
-        # O2 建议：增加 LIMIT 2000 降采样，防止 30 天约 43200 条记录一次性加载进内存造成 OOM
-        async with db.execute(
-            "SELECT ts, temp, humi FROM sensor_records WHERE device_id = ? AND ts >= ? ORDER BY ts ASC LIMIT 2000",
-            (device_id, cutoff_ts)
-        ) as cursor:
+        if start_ts is not None and end_ts is not None:
+            # 自定义时间段查询
+            query = "SELECT ts, temp, humi FROM sensor_records WHERE device_id = ? AND ts >= ? AND ts <= ? ORDER BY ts ASC LIMIT 3000"
+            params = (device_id, start_ts, end_ts)
+        else:
+            # 快捷天数查询 (默认 1 天)
+            actual_days = days if days is not None else 1
+            cutoff_ts = int(time.time()) - actual_days * 86400
+            query = "SELECT ts, temp, humi FROM sensor_records WHERE device_id = ? AND ts >= ? ORDER BY ts ASC LIMIT 3000"
+            params = (device_id, cutoff_ts)
+            
+        async with db.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
 async def get_all_devices() -> List[str]:
     """
-    获取系统中所有上报过数据的不同设备 ID 列表 (用于前端下拉框)
+    获取系统中所有已注册固件的设备 ID 列表 (用于前端向后兼容拉取)
     """
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
-        async with db.execute("SELECT DISTINCT device_id FROM sensor_records ORDER BY device_id ASC") as cursor:
+        async with db.execute("SELECT device_id FROM registered_devices ORDER BY device_id ASC") as cursor:
             rows = await cursor.fetchall()
             return [row[0] for row in rows]
 
@@ -113,4 +177,51 @@ async def update_alert_state(device_id: str, is_alerting: int, last_alert_ts: in
             "INSERT OR REPLACE INTO alert_state (device_id, is_alerting, last_alert_ts) VALUES (?, ?, ?)",
             (device_id, is_alerting, last_alert_ts)
         )
+        await db.commit()
+
+async def is_device_registered(device_id: str) -> bool:
+    """
+    检查指定设备 ID 是否已注册
+    """
+    async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
+        async with db.execute(
+            "SELECT 1 FROM registered_devices WHERE device_id = ? LIMIT 1",
+            (device_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row is not None
+
+async def get_registered_devices() -> List[Dict[str, Any]]:
+    """
+    获取系统中所有已注册的固件设备列表
+    """
+    async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT device_id, device_name, group_name, created_at FROM registered_devices ORDER BY created_at ASC"
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+async def register_device(device_id: str, device_name: str, group_name: str):
+    """
+    注册一个新设备，如果已存在则更新其名称和分组信息
+    """
+    now_ts = int(time.time())
+    async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
+        await db.execute("""
+            INSERT INTO registered_devices (device_id, device_name, group_name, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+                device_name = excluded.device_name,
+                group_name = excluded.group_name
+        """, (device_id, device_name, group_name, now_ts))
+        await db.commit()
+
+async def unregister_device(device_id: str):
+    """
+    注销指定设备，即从注册设备表中将其删除
+    """
+    async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
+        await db.execute("DELETE FROM registered_devices WHERE device_id = ?", (device_id,))
         await db.commit()
