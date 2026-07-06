@@ -148,6 +148,7 @@ namespace WebConfig {
         html += ".card { background: rgba(30, 41, 59, 0.8); border-radius: 16px; padding: 40px; max-width: 400px; border: 1px solid rgba(255,255,255,0.05); }";
         html += "h2 { color: #10b981; margin-top: 0; }";
         html += "p { color: #94a3b8; font-size: 15px; line-height: 1.6; }";
+        html += ".redirect-tips { color: #64748b; font-size: 12px; margin-top: 15px; }";
         html += ".spinner { border: 4px solid rgba(255,255,255,0.1); width: 36px; height: 36px; border-radius: 50%; ";
         html += "border-left-color: #10b981; animation: spin 1s linear infinite; margin: 20px auto 0; }";
         html += "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
@@ -157,7 +158,11 @@ namespace WebConfig {
         html += "<h2>配置保存成功！</h2>";
         html += "<p>设备参数已成功写入本地闪存。<br>ESP32-C3 正在重启以尝试连接您的新网络并上报数据。</p>";
         html += "<div class='spinner'></div>";
+        html += "<div class='redirect-tips'>设备正在重启，6 秒后将自动尝试返回配置首页...</div>";
         html += "</div>";
+        html += "<script>";
+        html += "  setTimeout(function() { window.location.href = '/'; }, 6000);";
+        html += "</script>";
         html += "</body></html>";
         return html;
     }
