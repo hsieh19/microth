@@ -9,7 +9,10 @@
 #define DEFAULT_SERVER_URL    "http://192.168.1.100:8000/api/data"
 #define DEFAULT_API_KEY       "your-32-char-secret-key-here"
 #define DEFAULT_DEVICE_ID     "esp32-01"
+#define DEFAULT_DEVICE_NAME   "默认温湿度设备"
 #define DEFAULT_REPORT_INTERVAL_MS 60000
+
+#define FIRMWARE_VERSION     "1.0.0"
 
 // ==================== 运行期全局变量 (启动时自 NVS 闪存中加载) ====================
 extern String global_wifi_ssid;
@@ -17,6 +20,7 @@ extern String global_wifi_password;
 extern String global_server_url;
 extern String global_api_key;
 extern String global_device_id;
+extern String global_device_name;
 extern unsigned long global_report_interval_ms;
 
 // ==================== 硬件级常量配置 (与物理接线或系统死线相关，不建议开放网页修改) ====================

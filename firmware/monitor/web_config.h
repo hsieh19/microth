@@ -113,6 +113,12 @@ namespace WebConfig {
         html += "<input type='text' name='device_id' value='" + global_device_id + "' required autocomplete='off'>";
         html += "</div>";
 
+        // Device Name
+        html += "<div class='form-group'>";
+        html += "<label>设备别名 (Device Name)</label>";
+        html += "<input type='text' name='device_name' value='" + global_device_name + "' autocomplete='off'>";
+        html += "</div>";
+
         // Report Interval
         html += "<div class='form-group'>";
         html += "<label>上报周期 (秒)</label>";
@@ -181,6 +187,7 @@ namespace WebConfig {
             String url    = server.arg("url");
             String key    = server.arg("key");
             String dev_id = server.arg("device_id");
+            String dev_name = server.arg("device_name");
             String interval_str = server.arg("interval_sec");
 
             // 必填字段非空校验
@@ -202,6 +209,10 @@ namespace WebConfig {
                 server.send(400, "text/plain; charset=utf-8", "Error: Device ID too long (max 32 chars).");
                 return;
             }
+            if (dev_name.length() > 64) {
+                server.send(400, "text/plain; charset=utf-8", "Error: Device Name too long (max 64 chars).");
+                return;
+            }
             if (url.length() > 128) {
                 server.send(400, "text/plain; charset=utf-8", "Error: Server URL too long (max 128 chars).");
                 return;
@@ -215,7 +226,7 @@ namespace WebConfig {
             }
 
             // 校验通过，保存到 NVS
-            NvsStorage::save_configs(ssid, pass, url, key, dev_id, interval);
+            NvsStorage::save_configs(ssid, pass, url, key, dev_id, dev_name, interval);
 
             server.send(200, "text/html", get_success_page());
             save_success = true;

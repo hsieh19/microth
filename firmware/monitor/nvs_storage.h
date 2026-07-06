@@ -28,6 +28,8 @@ namespace NvsStorage {
         global_api_key = prefs.getString("api_key", DEFAULT_API_KEY);
         // 加载设备 ID
         global_device_id = prefs.getString("device_id", DEFAULT_DEVICE_ID);
+        // 加载设备别名名称
+        global_device_name = prefs.getString("device_name", DEFAULT_DEVICE_NAME);
         // 加载上报周期 (以秒为单位读取，然后转换为毫秒。若不存在则用毫秒默认值转换为秒保存/读取)
         uint32_t interval_sec = prefs.getUInt("interval_sec", DEFAULT_REPORT_INTERVAL_MS / 1000);
         global_report_interval_ms = (unsigned long)interval_sec * 1000;
@@ -38,6 +40,7 @@ namespace NvsStorage {
         Serial.printf("  SSID: %s\n", global_wifi_ssid.c_str());
         Serial.printf("  Server URL: %s\n", global_server_url.c_str());
         Serial.printf("  Device ID: %s\n", global_device_id.c_str());
+        Serial.printf("  Device Name: %s\n", global_device_name.c_str());
         // S2 修复：API Key 以掩码形式输出，防止明文泄露至串口监视器
         String masked_key = global_api_key.length() >= 4
                             ? (global_api_key.substring(0, 4) + String("****"))
@@ -50,7 +53,7 @@ namespace NvsStorage {
     /**
      * @brief 保存新配置到 NVS 闪存，并更新运行期的全局配置变量
      */
-    void save_configs(String ssid, String pass, String url, String key, String dev_id, uint32_t interval_sec) {
+    void save_configs(String ssid, String pass, String url, String key, String dev_id, String dev_name, uint32_t interval_sec) {
         Preferences prefs;
         
         // 以读写模式打开命名空间
@@ -61,6 +64,7 @@ namespace NvsStorage {
         prefs.putString("server_url", url);
         prefs.putString("api_key", key);
         prefs.putString("device_id", dev_id);
+        prefs.putString("device_name", dev_name);
         prefs.putUInt("interval_sec", interval_sec);
 
         prefs.end();
@@ -71,6 +75,7 @@ namespace NvsStorage {
         global_server_url = url;
         global_api_key = key;
         global_device_id = dev_id;
+        global_device_name = dev_name;
         global_report_interval_ms = (unsigned long)interval_sec * 1000;
 
         Serial.println("[NVS] 新配置已成功持久化写入 NVS 闪存！");

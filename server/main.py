@@ -30,6 +30,42 @@ def setup_logger():
         console.setFormatter(formatter)
         root_logger.addHandler(console)
 
+def sync_firmware_version():
+    """
+    自动读取 firmware/version.json 里的版本号，并将其同步写入 firmware/monitor/config.h
+    以实现单点版本管理，避免固件和版本日志各处手工改动的不同步
+    """
+    import os
+    import json
+    import re
+    try:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        fw_json_path = os.path.join(base_dir, "firmware", "version.json")
+        fw_config_path = os.path.join(base_dir, "firmware", "monitor", "config.h")
+        
+        if not os.path.exists(fw_json_path) or not os.path.exists(fw_config_path):
+            return
+            
+        with open(fw_json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            version = data.get("version", "1.0.0")
+            
+        with open(fw_config_path, "r", encoding="utf-8") as f:
+            config_content = f.read()
+            
+        new_content = re.sub(
+            r'#define FIRMWARE_VERSION\s+".*?"',
+            f'#define FIRMWARE_VERSION     "{version}"',
+            config_content
+        )
+        
+        if new_content != config_content:
+            with open(fw_config_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+            logging.getLogger("lifespan").info(f"[Version] 成功将固件版本号 {version} 同步至 config.h")
+    except Exception as e:
+        logging.getLogger("lifespan").warning(f"[Version] 自动同步固件版本号失败: {e}")
+
 # 统一管理应用的启动与关闭生命周期
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,6 +75,9 @@ async def lifespan(app: FastAPI):
     setup_logger()
     logger = logging.getLogger("lifespan")
     logger.info("监控系统正在启动...")
+    
+    # 自动同步固件端版本号
+    sync_firmware_version()
     
     # 3. 异步初始化 SQLite 数据库
     await database.init_db()
@@ -57,19 +96,37 @@ async def lifespan(app: FastAPI):
 # 创建 FastAPI 实例
 app = FastAPI(
     title="温湿度智能远程监控系统",
-    version="2.1",
+    version="1.0.0",
     lifespan=lifespan
 )
 
 # 绑定模板引擎，用于渲染 Glassmorphism 大屏主页
 templates = Jinja2Templates(directory="templates")
 
+# 动态加载服务端版本号，作为 Single Source of Truth
+SERVER_VERSION = "1.0.0"
+try:
+    import os
+    import json
+    with open("server/version.json", "r", encoding="utf-8") as f:
+        _v_data = json.load(f)
+        SERVER_VERSION = _v_data.get("version", "1.0.0")
+except Exception:
+    try:
+        with open("version.json", "r", encoding="utf-8") as f:
+            _v_data = json.load(f)
+            SERVER_VERSION = _v_data.get("version", "1.0.0")
+    except Exception:
+        pass
+
 # ==================== Pydantic 入参模型 ====================
 class SensorRecord(BaseModel):
     device_id: str = Field(..., description="设备唯一标识", min_length=1, max_length=32)
-    temp: float = Field(..., description="温度数据 (摄氏度)", ge=-50.0, le=100.0)
-    humi: float = Field(..., description="湿度数据 (百分比)", ge=0.0, le=100.0)
+    temp: float = Field(..., description="温度 data (摄氏度)", ge=-50.0, le=100.0)
+    humi: float = Field(..., description="湿度 data (百分比)", ge=0.0, le=100.0)
     offset_sec: int = Field(default=0, description="相对于当前接收时间的采集偏移秒数", ge=0)
+    device_name: Optional[str] = Field(default="", description="设备别名名称")
+    device_ip: Optional[str] = Field(default="", description="设备本地局域网 IP")
 
     # O1 修复：对 device_id 增加正则格式校验，防止特殊字符导致日志污染或前端 XSS 风险
     @field_validator('device_id')
@@ -102,19 +159,27 @@ async def receive_sensor_data(record: SensorRecord, _: None = Depends(verify_api
         logging.warning(f"[Security] 拦截到未注册的设备数据上报尝试，设备 ID: {record.device_id}")
         raise HTTPException(status_code=403, detail="Forbidden: Device not registered")
 
-    # 1. 插入时序数据到 SQLite
+    # 1. 更新上报设备的 IP 与 设备别名 (自动检测与防覆盖)
+    await database.update_device_ip_and_name_if_changed(record.device_id, record.device_name or "", record.device_ip or "")
+
+    # 2. 插入时序数据到 SQLite
     ts = await database.add_record(record.device_id, record.temp, record.humi, record.offset_sec)
     
     logging.info(f"[Data] 接收设备 '{record.device_id}' 数据成功 -> 温度: {record.temp:.2f} °C, 湿度: {record.humi:.2f} %")
     
-    # 2. 状态机检查并触发飞书消息推送 (防轰炸冷却)
+    # 3. 状态机检查并触发飞书消息推送 (防轰炸冷却)
     await alerts.check_and_trigger_alerts(record.device_id, record.temp, record.humi)
+    
+    # 4. 获取数据库中最新的设备别名以便同步回固件端
+    db_device = await database.get_device_by_id(record.device_id)
+    latest_device_name = db_device['device_name'] if db_device else (record.device_name or "")
     
     return {
         "status": "ok",
         "ts": ts,
         "report_interval": settings.REPORT_INTERVAL_SEC,
-        "api_key": settings.API_KEY
+        "api_key": settings.API_KEY,
+        "device_name": latest_device_name
     }
 
 @app.get("/api/latest")
@@ -196,6 +261,7 @@ class DeviceRegisterModel(BaseModel):
     device_id: str = Field(..., min_length=1, max_length=32, description="设备唯一 ID")
     device_name: str = Field(default="", max_length=64, description="设备别名")
     group_name: str = Field(default="默认分组", max_length=64, description="设备分组")
+    device_ip: Optional[str] = Field(default="", max_length=64, description="设备 IP")
 
     @field_validator('device_id')
     @classmethod
@@ -207,7 +273,7 @@ class DeviceRegisterModel(BaseModel):
 @app.get("/api/devices/registered")
 async def get_registered_devices():
     """
-    拉取目前系统已注册的所有设备列表 (含名称和分组)
+    拉取目前系统已注册的所有设备列表 (含名称, IP 和分组)
     """
     return await database.get_registered_devices()
 
@@ -219,11 +285,12 @@ async def register_new_device(device: DeviceRegisterModel):
     {
         "device_id": "esp32-01",
         "device_name": "主卧室传感器",
-        "group_name": "一楼生活区"
+        "group_name": "一楼生活区",
+        "device_ip": "172.17.213.118"
     }
     ```
     """
-    await database.register_device(device.device_id, device.device_name, device.group_name)
+    await database.register_device(device.device_id, device.device_name, device.group_name, device.device_ip or "")
     return {"status": "ok"}
 
 @app.delete("/api/devices/registered/{device_id}")
@@ -241,6 +308,6 @@ async def unregister_device(device_id: str):
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard_page(request: Request):
     """
-    页面：渲染温湿度监控大屏主页
+    页面：渲染温湿度监控大屏主页 (动态注入服务端版本号)
     """
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"version": SERVER_VERSION})

@@ -40,3 +40,7 @@ Thumbs.db
 .env
 *.env
 server/data/
+
+# 助手开发缓存与配置
+.agents/
+.gemini/

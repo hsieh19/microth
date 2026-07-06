@@ -1,0 +1,60 @@
+name: Build and Publish Docker Image
+
+# 触发条件：当 server 下的 version.json 文件在主分支发生变更提交时触发
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'server/version.json'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. 动态解析 server/version.json 提取其中的 version 字段值
+      - name: Extract version from version.json
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' server/version.json)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      # 2. 登录到 GitHub Packages 容器注册表 (GHCR)
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. 设置 Buildx 多平台构建套件
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4. 将 GitHub 镜像路径（可能含大写）转换为 Docker 要求的全小写字符
+      - name: Downcase image name
+        id: string
+        run: |
+          echo "IMAGE_NAME_LOWER=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      # 5. 构建并 Push 镜像，同时标记最新版和具体版本号
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.string.outputs.IMAGE_NAME_LOWER }}:latest
+            ${{ steps.string.outputs.IMAGE_NAME_LOWER }}:${{ steps.get_version.outputs.VERSION }}

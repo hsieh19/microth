@@ -14,6 +14,7 @@ String global_wifi_password;
 String global_server_url;
 String global_api_key;
 String global_device_id;
+String global_device_name;
 unsigned long global_report_interval_ms;
 
 // 记录上一次数据上报的时间戳
@@ -58,7 +59,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
     Serial.println("\n==================================================");
-    Serial.println("  轻量化温湿度监控系统 ESP32-C3 固件 v2.1 启动");
+    Serial.println("  轻量化温湿度监控系统 ESP32-C3 固件 v" FIRMWARE_VERSION " 启动");
     Serial.println("==================================================");
 
     // 1. 初始化看门狗

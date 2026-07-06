@@ -1,0 +1,39 @@
+# ==========================================
+# 远程温湿度监控系统 Docker 忽略配置文件
+# ==========================================
+
+# 1. 忽略固件源码 (固件为物理板卡烧录代码，无需打包进服务器容器)
+firmware/
+
+# 2. 忽略 Python 本地虚拟环境与依赖
+server/.venv/
+.venv/
+venv/
+ENV/
+
+# 3. 忽略 Python 运行时缓存文件
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+
+# 4. 忽略本地的测试数据库文件与系统运行日志
+# (生产环境的持久化数据和日志通过 Docker Volume 独立挂载，此处需防止被复制进镜像)
+server/data/
+server/logs/
+data/
+logs/
+*.db
+*.sqlite3
+
+# 5. 忽略 Git 版本控制与说明文档
+.git/
+.gitignore
+*.md
+
+# 6. 忽略开发工具和 Agent 临时缓存
+.idea/
+.vscode/
+.agents/
+.gemini/

@@ -35,16 +35,23 @@ async def init_db():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_ts ON sensor_records (ts);")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_device_ts ON sensor_records (device_id, ts);")
         
-        # 5. 建立设备注册表
+        # 5. 建立设备注册表 (增加 device_ip 字段)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS registered_devices (
                 device_id   TEXT    PRIMARY KEY,
                 device_name TEXT    NOT NULL DEFAULT '',
                 group_name  TEXT    NOT NULL DEFAULT '默认分组',
+                device_ip   TEXT    NOT NULL DEFAULT '',
                 created_at  INTEGER NOT NULL
             );
         """)
         
+        # 6. 向后兼容性字段升级：增加 device_ip
+        try:
+            await db.execute("ALTER TABLE registered_devices ADD COLUMN device_ip TEXT NOT NULL DEFAULT '';")
+        except Exception:
+            pass
+
         await db.commit()
         
         # 6. 向后兼容性处理：若设备注册表为空，则将已有上报历史的设备自动迁移注册
@@ -193,30 +200,76 @@ async def is_device_registered(device_id: str) -> bool:
 
 async def get_registered_devices() -> List[Dict[str, Any]]:
     """
-    获取系统中所有已注册的固件设备列表
+    获取系统中所有已注册的固件设备列表 (包含最新的 IP 信息)
     """
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT device_id, device_name, group_name, created_at FROM registered_devices ORDER BY created_at ASC"
+            "SELECT device_id, device_name, group_name, device_ip, created_at FROM registered_devices ORDER BY created_at ASC"
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-async def register_device(device_id: str, device_name: str, group_name: str):
+async def get_device_by_id(device_id: str) -> Optional[Dict[str, Any]]:
     """
-    注册一个新设备，如果已存在则更新其名称和分组信息
+    获取特定设备的所有注册信息
+    """
+    async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT device_id, device_name, group_name, device_ip, created_at FROM registered_devices WHERE device_id = ?",
+            (device_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+async def register_device(device_id: str, device_name: str, group_name: str, device_ip: str = ""):
+    """
+    注册一个新设备，如果已存在则更新其名称和分组信息 (支持记录 IP 且不覆盖空)
     """
     now_ts = int(time.time())
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         await db.execute("""
-            INSERT INTO registered_devices (device_id, device_name, group_name, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO registered_devices (device_id, device_name, group_name, device_ip, created_at)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(device_id) DO UPDATE SET
                 device_name = excluded.device_name,
-                group_name = excluded.group_name
-        """, (device_id, device_name, group_name, now_ts))
+                group_name = excluded.group_name,
+                device_ip = CASE WHEN excluded.device_ip <> '' THEN excluded.device_ip ELSE device_ip END
+        """, (device_id, device_name, group_name, device_ip, now_ts))
         await db.commit()
+
+async def update_device_ip_and_name_if_changed(device_id: str, device_name: str, device_ip: str):
+    """
+    在固件端上报数据时，自动更新设备的最新局域网 IP 地址，
+    如果当前服务端未对别名命名（或以默认的'设备'开头且上传了不同的自定义名称），则也进行同步更新
+    """
+    async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT device_name, device_ip FROM registered_devices WHERE device_id = ?", (device_id,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                db_name = row['device_name']
+                db_ip = row['device_ip']
+                
+                needs_update = False
+                update_fields = []
+                params = []
+                
+                if db_ip != device_ip and device_ip != "":
+                    update_fields.append("device_ip = ?")
+                    params.append(device_ip)
+                    needs_update = True
+                    
+                if (db_name == "" or db_name.startswith("设备 ")) and device_name != "" and device_name != db_name:
+                    update_fields.append("device_name = ?")
+                    params.append(device_name)
+                    needs_update = True
+                    
+                if needs_update:
+                    params.append(device_id)
+                    await db.execute(f"UPDATE registered_devices SET {', '.join(update_fields)} WHERE device_id = ?", tuple(params))
+                    await db.commit()
 
 async def unregister_device(device_id: str):
     """

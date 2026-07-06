@@ -1,0 +1,32 @@
+# ==========================================
+# 远程温湿度监控系统 Server 目录 Docker 忽略配置
+# ==========================================
+
+# 1. 忽略 Python 本地虚拟环境与依赖
+.venv/
+venv/
+ENV/
+
+# 2. 忽略 Python 运行时缓存文件
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+
+# 3. 忽略本地测试数据与日志 (通过 Volume 独立挂载，防打包复制)
+data/
+logs/
+*.db
+*.sqlite3
+
+# 4. 忽略文档与 Git 管理
+.git/
+.gitignore
+*.md
+
+# 5. 忽略开发工具和缓存
+.idea/
+.vscode/
+.agents/
+.gemini/

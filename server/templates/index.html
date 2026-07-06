@@ -884,6 +884,7 @@
                                         <th>设备 ID</th>
                                         <th>别名</th>
                                         <th>所属分组</th>
+                                        <th>设备 IP</th>
                                         <th>注册时间</th>
                                         <th style="width: 160px; text-align: center;">操作</th>
                                     </tr>
@@ -946,7 +947,7 @@
     </div>
 
     <footer>
-        <p>轻量化远程温湿度监控系统 v2.3 | Powered by FastAPI, SQLite & Chart.js</p>
+        <p>轻量化远程温湿度监控系统 v{{ version }} | Powered by FastAPI, SQLite & Chart.js</p>
     </footer>
 
     <script>
@@ -960,6 +961,7 @@
         let updateInterval = null;
         let currentViewMode = "chart"; // 图表或表格切换："chart" | "table"
         let lastHistoryData = [];      // 缓存当前拉取的历史时序数据
+        let lastUpdateTimeStamp = 0;   // 缓存最新温湿度数据的时间戳以判定是否需要同步刷新图表
 
         // 获取 DOM 元素
         const deviceSelect = document.getElementById("deviceSelect");
@@ -998,13 +1000,14 @@
             // 选择设备改变
             deviceSelect.addEventListener("change", (e) => {
                 currentDeviceId = e.target.value;
+                lastUpdateTimeStamp = 0; // 重置已保存的时间戳
                 if (currentDeviceId) {
                     chartEmptyState.style.display = "none";
                     refreshDashboard();
                     
-                    // 重置并启动 60 秒轮询刷新卡片
+                    // 重置并启动 5 秒轮询刷新卡片 (大幅缩短延迟，确保新上报数据即刻呈现)
                     if (updateInterval) clearInterval(updateInterval);
-                    updateInterval = setInterval(refreshLatestData, 60000);
+                    updateInterval = setInterval(refreshLatestData, 5000);
                 } else {
                     chartEmptyState.style.display = "block";
                     document.getElementById("historyTableContainer").style.display = "none";
@@ -1375,11 +1378,12 @@
                     // 默认选择第一台设备
                     deviceSelect.value = devices[0].device_id;
                     currentDeviceId = devices[0].device_id;
+                    lastUpdateTimeStamp = 0;
                     chartEmptyState.style.display = "none";
                     refreshDashboard();
                     
                     if (updateInterval) clearInterval(updateInterval);
-                    updateInterval = setInterval(refreshLatestData, 60000);
+                    updateInterval = setInterval(refreshLatestData, 5000);
                 }
             } catch (err) {
                 console.error("加载设备出错:", err);
@@ -1397,7 +1401,7 @@
                 tableBody.innerHTML = "";
                 
                 if (devices.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 30px;">暂无已注册设备</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 30px;">暂无已注册设备</td></tr>';
                     return;
                 }
                 
@@ -1408,6 +1412,7 @@
                         <td style="font-weight: 600; color: var(--neon-blue);">${dev.device_id}</td>
                         <td>${dev.device_name || '<span style="color: var(--text-secondary);">未命名</span>'}</td>
                         <td><span style="background: rgba(56, 189, 248, 0.1); color: var(--neon-blue); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 500;">${dev.group_name}</span></td>
+                        <td style="font-family: monospace; font-size: 13px; color: var(--text-primary);">${dev.device_ip || '<span style="color: var(--text-secondary);">未知 IP</span>'}</td>
                         <td style="font-size: 13px; color: var(--text-secondary);">${dateStr}</td>
                         <td style="text-align: center; white-space: nowrap;">
                             <button class="btn-edit-neon" onclick="editDevice('${dev.device_id}', '${dev.device_name || ""}', '${dev.group_name || ""}')" style="margin-right: 8px;">
@@ -1485,6 +1490,7 @@
                 const res = await fetch(`/api/latest?device_id=${currentDeviceId}`);
                 if (res.status === 404) {
                     resetCardValues();
+                    lastUpdateTimeStamp = 0;
                     return;
                 }
                 const data = await res.json();
@@ -1517,6 +1523,12 @@
                 if (data.report_interval !== undefined) {
                     reportIntervalText.textContent = `上报周期：${data.report_interval}秒 (Ajax轮询中)`;
                 }
+
+                // 如果检测到有最新数据上报（时间戳发生递增），则静默且自动重绘趋势图，实现页面 100% 免手动刷新
+                if (data.ts > lastUpdateTimeStamp) {
+                    lastUpdateTimeStamp = data.ts;
+                    drawChart();
+                }
                 
             } catch (err) {
                 console.error("更新最新卡片数据失败:", err);
@@ -1533,7 +1545,10 @@
                 return;
             }
             
-            data.forEach(item => {
+            // 复制并倒序，以让最新（时间戳最大）的数据显示在最上方
+            const reversedData = [...data].reverse();
+            
+            reversedData.forEach(item => {
                 const dateStr = new Date(item.ts * 1000).toLocaleString('zh-CN', { hour12: false });
                 const tr = document.createElement("tr");
                 tr.innerHTML = `

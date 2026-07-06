@@ -65,11 +65,16 @@ namespace HttpClient {
         http.addHeader("Content-Type", "application/json");
         http.addHeader("X-API-Key", global_api_key);
 
-        // 4. 构建带有 offset_sec 相对偏移时间的 JSON 载荷
+        // 4. 构建带有 offset_sec 相对偏移时间的 JSON 载荷 (添加设备名称与 IP)
+        String local_ip = WiFi.localIP().toString();
         String payload = "{\"device_id\":\"" + global_device_id + "\","
+                         "\"device_name\":\"" + global_device_name + "\","
+                         "\"device_ip\":\"" + local_ip + "\","
                          "\"temp\":" + String(temp, 2) + ","
                          "\"humi\":" + String(humi, 2) + ","
                          "\"offset_sec\":" + String(offset_sec) + "}";
+
+        Serial.printf("[HTTP] 准备向服务器上报数据... 当前系统上报周期: %lu 毫秒\n", global_report_interval_ms);
 
         // 5. 执行 POST 请求
         int http_code = http.POST(payload);
@@ -82,6 +87,7 @@ namespace HttpClient {
                 
                 // 消耗并读取流式响应，保证连接被释放
                 String response = http.getString();
+                Serial.printf("[HTTP] 成功收到服务端响应 JSON: %s\n", response.c_str());
                 
                 // 原生解析上报周期 report_interval
                 long new_interval_sec = -1;
@@ -122,17 +128,38 @@ namespace HttpClient {
                     }
                 }
 
+                // 原生解析设备别名 device_name
+                String new_device_name = "";
+                int dn_idx = response.indexOf("\"device_name\"");
+                if (dn_idx != -1) {
+                    int colon_idx = response.indexOf(":", dn_idx);
+                    if (colon_idx != -1) {
+                        int quote_start = response.indexOf("\"", colon_idx);
+                        if (quote_start != -1) {
+                            int quote_end = response.indexOf("\"", quote_start + 1);
+                            if (quote_end != -1) {
+                                new_device_name = response.substring(quote_start + 1, quote_end);
+                            }
+                        }
+                    }
+                }
+
                 // 比对当前配置是否发生变更并自动同步到 NVS
                 uint32_t current_interval_sec = global_report_interval_ms / 1000;
                 String target_key = (new_api_key.length() > 0) ? new_api_key : global_api_key;
                 uint32_t target_interval_sec = (new_interval_sec > 0) ? (uint32_t)new_interval_sec : current_interval_sec;
+                String target_name = (new_device_name.length() > 0) ? new_device_name : global_device_name;
 
-                if (target_key != global_api_key || target_interval_sec != current_interval_sec) {
+                Serial.printf("[HTTP] 解析结果 -> 提取上报周期: %ld 秒, 提取 API Key: %s, 提取设备别名: %s\n", 
+                    new_interval_sec, new_api_key.c_str(), new_device_name.c_str());
+
+                if (target_key != global_api_key || target_interval_sec != current_interval_sec || target_name != global_device_name) {
                     Serial.println("[HTTP] 检测到系统配置变更，开始自动同步！");
                     Serial.printf("  API Key: %s -> %s\n", 
                         global_api_key.length() >= 4 ? (global_api_key.substring(0, 4) + "****").c_str() : "****", 
                         target_key.length() >= 4 ? (target_key.substring(0, 4) + "****").c_str() : "****");
                     Serial.printf("  上报周期: %d 秒 -> %d 秒\n", current_interval_sec, target_interval_sec);
+                    Serial.printf("  设备别名: %s -> %s\n", global_device_name.c_str(), target_name.c_str());
                     
                     // 保存新参数到 NVS
                     NvsStorage::save_configs(
@@ -141,6 +168,7 @@ namespace HttpClient {
                         global_server_url,
                         target_key,
                         global_device_id,
+                        target_name,
                         target_interval_sec
                     );
                 }
