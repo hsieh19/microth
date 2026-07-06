@@ -122,11 +122,12 @@ except Exception:
 # ==================== Pydantic 入参模型 ====================
 class SensorRecord(BaseModel):
     device_id: str = Field(..., description="设备唯一标识", min_length=1, max_length=32)
-    temp: float = Field(..., description="温度 data (摄氏度)", ge=-50.0, le=100.0)
-    humi: float = Field(..., description="湿度 data (百分比)", ge=0.0, le=100.0)
+    temp: float = Field(..., description="温度 data (摄氏度)", ge=-1000.0, le=100.0)
+    humi: float = Field(..., description="湿度 data (百分比)", ge=-1000.0, le=100.0)
     offset_sec: int = Field(default=0, description="相对于当前接收时间的采集偏移秒数", ge=0)
     device_name: Optional[str] = Field(default="", description="设备别名名称")
     device_ip: Optional[str] = Field(default="", description="设备本地局域网 IP")
+    sensor_alert_enabled: bool = Field(default=True, description="是否启用传感器故障飞书报警")
 
     # O1 修复：对 device_id 增加正则格式校验，防止特殊字符导致日志污染或前端 XSS 风险
     @field_validator('device_id')
@@ -162,13 +163,29 @@ async def receive_sensor_data(record: SensorRecord, _: None = Depends(verify_api
     # 1. 更新上报设备的 IP 与 设备别名 (自动检测与防覆盖)
     await database.update_device_ip_and_name_if_changed(record.device_id, record.device_name or "", record.device_ip or "")
 
+    # 获取本设备最新的上一条数据记录 (在插入新记录前获取，用于状态机判断)
+    last_record = await database.get_latest_record_for_device(record.device_id)
+
     # 2. 插入时序数据到 SQLite
     ts = await database.add_record(record.device_id, record.temp, record.humi, record.offset_sec)
     
     logging.info(f"[Data] 接收设备 '{record.device_id}' 数据成功 -> 温度: {record.temp:.2f} °C, 湿度: {record.humi:.2f} %")
     
     # 3. 状态机检查并触发飞书消息推送 (防轰炸冷却)
-    await alerts.check_and_trigger_alerts(record.device_id, record.temp, record.humi)
+    # 首先处理温湿度传感器连接断开/恢复的警报逻辑
+    await alerts.check_sensor_status_and_alert(
+        record.device_id, 
+        record.temp, 
+        record.humi, 
+        record.sensor_alert_enabled,
+        record.device_name or "",
+        record.device_ip or "",
+        last_record
+    )
+    
+    # 接着如果传感器状态是正常的，我们才去进行正常的温湿度越限警报判断
+    if record.temp != -999.0:
+        await alerts.check_and_trigger_alerts(record.device_id, record.temp, record.humi)
     
     # 4. 获取数据库中最新的设备别名以便同步回固件端
     db_device = await database.get_device_by_id(record.device_id)

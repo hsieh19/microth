@@ -13,6 +13,7 @@
 #define DEFAULT_REPORT_INTERVAL_MS 60000
 
 #define FIRMWARE_VERSION     "1.0.0"
+#define DEFAULT_SENSOR_ALERT_ENABLED true
 
 // ==================== 运行期全局变量 (启动时自 NVS 闪存中加载) ====================
 extern String global_wifi_ssid;
@@ -22,6 +23,7 @@ extern String global_api_key;
 extern String global_device_id;
 extern String global_device_name;
 extern unsigned long global_report_interval_ms;
+extern bool global_sensor_alert_enabled;
 
 // ==================== 硬件级常量配置 (与物理接线或系统死线相关，不建议开放网页修改) ====================
 // 硬件看门狗超时时间 (秒)

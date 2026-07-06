@@ -3,6 +3,15 @@
 All notable changes to the single-chip firmware project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-07-06
+
+### Added
+- **传感器异常心跳上报**：在传感器读取故障或未连接时，固件仍坚持定期发送上报包（温湿度使用占位值 `-999.0f`），以确保设备的局域网 IP 与别名能在第一时间注册上报到服务器。
+- **本地报警配置开关**：
+  - 在本地 AP 门户配置网页中新增了“传感器断连报警 (飞书推送)”的下拉启用选项。
+  - 支持将该开关配置参数持久化写入本地 NVS 闪存中，并在每次启动时自动加载。
+  - 上报载荷中新增 `"sensor_alert_enabled"` 字段，通知服务器是否对当前设备的传感器故障发送通知。
+
 ## [1.0.0] - 2026-07-06
 
 ### Added

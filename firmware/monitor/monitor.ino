@@ -16,6 +16,7 @@ String global_api_key;
 String global_device_id;
 String global_device_name;
 unsigned long global_report_interval_ms;
+bool global_sensor_alert_enabled = DEFAULT_SENSOR_ALERT_ENABLED;
 
 // 记录上一次数据上报的时间戳
 unsigned long last_report_time = 0;
@@ -123,7 +124,10 @@ void loop() {
             // 上报数据 (如果 Wi-Fi 连接则上报，否则会缓存等待下个周期)
             HttpClient::post_data(temp, humi);
         } else {
-            Serial.println("[Loop] 警告: 传感器数据读取失败，本周期放弃上报");
+            Serial.println("[Loop] 警告: 传感器数据读取失败，发送心跳数据以同步 IP 与别名...");
+            global_sensor_ready = false;
+            // 使用错误状态特殊值 -999.0f 进行心跳上报，保障本地 IP 与别名的注册同步
+            HttpClient::post_data(-999.0f, -999.0f);
         }
 
         // 更新上报时间戳，无论成功与否均进入下一等待周期

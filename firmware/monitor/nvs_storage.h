@@ -33,6 +33,8 @@ namespace NvsStorage {
         // 加载上报周期 (以秒为单位读取，然后转换为毫秒。若不存在则用毫秒默认值转换为秒保存/读取)
         uint32_t interval_sec = prefs.getUInt("interval_sec", DEFAULT_REPORT_INTERVAL_MS / 1000);
         global_report_interval_ms = (unsigned long)interval_sec * 1000;
+        // 加载传感器未连接报警开关
+        global_sensor_alert_enabled = prefs.getBool("sensor_alert", DEFAULT_SENSOR_ALERT_ENABLED);
 
         prefs.end();
 
@@ -47,13 +49,14 @@ namespace NvsStorage {
                             : "****";
         Serial.printf("  API Key: %s\n", masked_key.c_str());
         Serial.printf("  上报周期: %lu 毫秒\n", global_report_interval_ms);
+        Serial.printf("  传感器报警: %s\n", global_sensor_alert_enabled ? "已启用" : "已禁用");
 
     }
 
     /**
      * @brief 保存新配置到 NVS 闪存，并更新运行期的全局配置变量
      */
-    void save_configs(String ssid, String pass, String url, String key, String dev_id, String dev_name, uint32_t interval_sec) {
+    void save_configs(String ssid, String pass, String url, String key, String dev_id, String dev_name, uint32_t interval_sec, bool sensor_alert) {
         Preferences prefs;
         
         // 以读写模式打开命名空间
@@ -66,6 +69,7 @@ namespace NvsStorage {
         prefs.putString("device_id", dev_id);
         prefs.putString("device_name", dev_name);
         prefs.putUInt("interval_sec", interval_sec);
+        prefs.putBool("sensor_alert", sensor_alert);
 
         prefs.end();
 
@@ -77,6 +81,7 @@ namespace NvsStorage {
         global_device_id = dev_id;
         global_device_name = dev_name;
         global_report_interval_ms = (unsigned long)interval_sec * 1000;
+        global_sensor_alert_enabled = sensor_alert;
 
         Serial.println("[NVS] 新配置已成功持久化写入 NVS 闪存！");
     }

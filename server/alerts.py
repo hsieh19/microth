@@ -119,3 +119,54 @@ async def check_and_trigger_alerts(device_id: str, temp: float, humi: float):
             
             # 状态持久化复位 (is_alerting = 0, 时间戳清零)
             await database.update_alert_state(device_id, 0, 0)
+
+async def check_sensor_status_and_alert(
+    device_id: str, 
+    temp: float, 
+    humi: float, 
+    sensor_alert_enabled: bool,
+    device_name: str = "",
+    device_ip: str = "",
+    last_record: dict = None
+):
+    """
+    检测传感器掉线/恢复状态，并在开启了报警时向飞书推送卡片
+    """
+    if not sensor_alert_enabled:
+        return
+
+    # 1. 判定前一状态
+    is_last_fault = False
+    if last_record and last_record.get("temp") == -999.0:
+        is_last_fault = True
+
+    # 2. 判定当前状态
+    is_current_fault = (temp == -999.0)
+
+    display_name = device_name if device_name else "未命名设备"
+
+    # 3. 状态转换检测与飞书卡片推送
+    if not is_last_fault and is_current_fault:
+        # 正常 -> 异常
+        title = "🔴 传感器断连/故障告警"
+        content = (
+            f"**设备标识**: `{device_id}`\n"
+            f"**设备名称**: `{display_name}`\n"
+            f"**设备 IP**: `{device_ip}`\n\n"
+            f"🚨 **警报原因**: 远程监测终端检测到 **温湿度传感器未连接或读取故障**，已无法采集实时环境数据！\n"
+            f"⚠️ **排查建议**: 请尽快派员现场检查板卡传感器接线或 SHT40 芯片运行状态。"
+        )
+        await send_feishu_card(template="red", title=title, content=content)
+        
+    elif is_last_fault and not is_current_fault:
+        # 异常 -> 正常
+        title = "🟢 传感器状态已恢复"
+        content = (
+            f"**设备标识**: `{device_id}`\n"
+            f"**设备名称**: `{display_name}`\n"
+            f"**设备 IP**: `{device_ip}`\n\n"
+            f"✅ **恢复原因**: 监测终端的温湿度传感器 **已重新连接成功，读数恢复正常**。\n"
+            f"🟢 **当前温度**: {temp:.2f} °C\n"
+            f"🟢 **当前湿度**: {humi:.2f} %"
+        )
+        await send_feishu_card(template="green", title=title, content=content)

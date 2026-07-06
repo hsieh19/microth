@@ -1220,9 +1220,8 @@
                 document.getElementById("regDeviceName").value = deviceName;
                 document.getElementById("regGroupName").value = groupName;
                 
-                document.getElementById("btnRegisterSubmitText").textContent = "更新配置";
                 const submitBtn = document.getElementById("btnRegisterSubmit");
-                submitBtn.querySelector("i").className = "fa-solid fa-pen-to-square";
+                submitBtn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> <span id="btnRegisterSubmitText">更新配置</span>';
                 
                 document.getElementById("btnCancelEdit").style.display = "flex";
             }
@@ -1237,9 +1236,8 @@
                 document.getElementById("regDeviceName").value = "";
                 document.getElementById("regGroupName").value = "";
                 
-                document.getElementById("btnRegisterSubmitText").textContent = "注册设备";
                 const submitBtn = document.getElementById("btnRegisterSubmit");
-                submitBtn.querySelector("i").className = "fa-solid fa-floppy-disk";
+                submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span id="btnRegisterSubmitText">注册设备</span>';
                 
                 document.getElementById("btnCancelEdit").style.display = "none";
             }
@@ -1496,23 +1494,35 @@
                 const data = await res.json();
                 
                 // 渲染实时温度
-                latestTempEl.innerHTML = `${data.temp.toFixed(1)}<span class="card-unit">°C</span>`;
-                if (data.temp > (parseFloat(document.getElementById("cfgTempAlert").value) || 35)) {
-                    tempStatusEl.textContent = "温度超标 (异常)";
+                if (data.temp === -999) {
+                    latestTempEl.innerHTML = `无数据<span class="card-unit"></span>`;
+                    tempStatusEl.textContent = "传感器未连接";
                     tempDot.className = "status-dot dot-red";
                 } else {
-                    tempStatusEl.textContent = "温度正常";
-                    tempDot.className = "status-dot dot-green";
+                    latestTempEl.innerHTML = `${data.temp.toFixed(1)}<span class="card-unit">°C</span>`;
+                    if (data.temp > (parseFloat(document.getElementById("cfgTempAlert").value) || 35)) {
+                        tempStatusEl.textContent = "温度超标 (异常)";
+                        tempDot.className = "status-dot dot-red";
+                    } else {
+                        tempStatusEl.textContent = "温度正常";
+                        tempDot.className = "status-dot dot-green";
+                    }
                 }
 
                 // 渲染实时湿度
-                latestHumiEl.innerHTML = `${data.humi.toFixed(1)}<span class="card-unit">%</span>`;
-                if (data.humi > (parseFloat(document.getElementById("cfgHumiAlert").value) || 80)) {
-                    humiStatusEl.textContent = "湿度超标 (异常)";
+                if (data.humi === -999) {
+                    latestHumiEl.innerHTML = `无数据<span class="card-unit"></span>`;
+                    humiStatusEl.textContent = "传感器未连接";
                     humiDot.className = "status-dot dot-red";
                 } else {
-                    humiStatusEl.textContent = "湿度正常";
-                    humiDot.className = "status-dot dot-green";
+                    latestHumiEl.innerHTML = `${data.humi.toFixed(1)}<span class="card-unit">%</span>`;
+                    if (data.humi > (parseFloat(document.getElementById("cfgHumiAlert").value) || 80)) {
+                        humiStatusEl.textContent = "湿度超标 (异常)";
+                        humiDot.className = "status-dot dot-red";
+                    } else {
+                        humiStatusEl.textContent = "湿度正常";
+                        humiDot.className = "status-dot dot-green";
+                    }
                 }
 
                 // 渲染时间戳
@@ -1551,10 +1561,16 @@
             reversedData.forEach(item => {
                 const dateStr = new Date(item.ts * 1000).toLocaleString('zh-CN', { hour12: false });
                 const tr = document.createElement("tr");
+                
+                const tempText = item.temp === -999 ? "传感器未连接" : `${item.temp.toFixed(2)} °C`;
+                const humiText = item.humi === -999 ? "传感器未连接" : `${item.humi.toFixed(2)} %`;
+                const tempColor = item.temp === -999 ? "var(--text-secondary)" : "var(--neon-amber)";
+                const humiColor = item.humi === -999 ? "var(--text-secondary)" : "var(--neon-blue)";
+                
                 tr.innerHTML = `
                     <td style="font-size: 13px; color: var(--text-secondary);">${dateStr}</td>
-                    <td style="font-weight: 600; color: var(--neon-amber);">${item.temp.toFixed(2)} °C</td>
-                    <td style="font-weight: 600; color: var(--neon-blue);">${item.humi.toFixed(2)} %</td>
+                    <td style="font-weight: 600; color: ${tempColor};">${tempText}</td>
+                    <td style="font-weight: 600; color: ${humiColor};">${humiText}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -1606,8 +1622,8 @@
                     } else {
                         labels.push(`${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:00`);
                     }
-                    tempValues.push(item.temp);
-                    humiValues.push(item.humi);
+                    tempValues.push(item.temp === -999 ? null : item.temp);
+                    humiValues.push(item.humi === -999 ? null : item.humi);
                 });
 
                 if (chart) {

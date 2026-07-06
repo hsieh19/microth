@@ -125,6 +125,15 @@ namespace WebConfig {
         html += "<input type='number' name='interval_sec' min='5' max='86400' value='" + String(global_report_interval_ms / 1000) + "' required>";
         html += "</div>";
 
+        // Sensor Alert Option
+        html += "<div class='form-group'>";
+        html += "<label>传感器断连报警 (飞书推送)</label>";
+        html += "<select name='sensor_alert' style='width: 100%; padding: 12px 14px; border: 1px solid #334155; background: rgba(15, 23, 42, 0.6); color: #f8fafc; border-radius: 10px; font-size: 15px;'>";
+        html += "  <option value='1'" + String(global_sensor_alert_enabled ? " selected" : "") + ">开启</option>";
+        html += "  <option value='0'" + String(!global_sensor_alert_enabled ? " selected" : "") + ">关闭</option>";
+        html += "</select>";
+        html += "</div>";
+
         html += "<button type='submit'>保存配置并重启设备</button>";
         html += "</form>";
         html += "<div class='footer'>设备芯片: ESP32-C3 | I2C 传感器: SHT40</div>";
@@ -194,6 +203,7 @@ namespace WebConfig {
             String dev_id = server.arg("device_id");
             String dev_name = server.arg("device_name");
             String interval_str = server.arg("interval_sec");
+            String sensor_alert_str = server.arg("sensor_alert");
 
             // 必填字段非空校验
             if (ssid.isEmpty() || url.isEmpty() || key.isEmpty() || dev_id.isEmpty()) {
@@ -230,8 +240,10 @@ namespace WebConfig {
                 interval = 60; // 回退安全默认值，不直接拒绝请求
             }
 
+            bool sensor_alert = (sensor_alert_str == "1");
+
             // 校验通过，保存到 NVS
-            NvsStorage::save_configs(ssid, pass, url, key, dev_id, dev_name, interval);
+            NvsStorage::save_configs(ssid, pass, url, key, dev_id, dev_name, interval, sensor_alert);
 
             server.send(200, "text/html", get_success_page());
             save_success = true;

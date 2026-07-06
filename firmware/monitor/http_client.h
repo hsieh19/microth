@@ -65,13 +65,15 @@ namespace HttpClient {
         http.addHeader("Content-Type", "application/json");
         http.addHeader("X-API-Key", global_api_key);
 
-        // 4. 构建带有 offset_sec 相对偏移时间的 JSON 载荷 (添加设备名称与 IP)
+        // 4. 构建带有 offset_sec 相对偏移时间的 JSON 载荷 (添加设备名称、IP 及警报开关配置)
         String local_ip = WiFi.localIP().toString();
+        String sensor_alert_str = global_sensor_alert_enabled ? "true" : "false";
         String payload = "{\"device_id\":\"" + global_device_id + "\","
                          "\"device_name\":\"" + global_device_name + "\","
                          "\"device_ip\":\"" + local_ip + "\","
                          "\"temp\":" + String(temp, 2) + ","
                          "\"humi\":" + String(humi, 2) + ","
+                         "\"sensor_alert_enabled\":" + sensor_alert_str + ","
                          "\"offset_sec\":" + String(offset_sec) + "}";
 
         Serial.printf("[HTTP] 准备向服务器上报数据... 当前系统上报周期: %lu 毫秒\n", global_report_interval_ms);
@@ -169,7 +171,8 @@ namespace HttpClient {
                         target_key,
                         global_device_id,
                         target_name,
-                        target_interval_sec
+                        target_interval_sec,
+                        global_sensor_alert_enabled
                     );
                 }
             } else if (http_code == 403) {
