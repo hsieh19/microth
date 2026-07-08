@@ -3,6 +3,19 @@
 All notable changes to the single-chip firmware project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-07-08
+
+### Added
+- **极致省电与低功耗模式设计**：
+  - **双重供电模式分流**：支持在网页端将“供电模式（电池省电/插电常驻）”保存持久化至 NVS 闪存中。
+  - **默认插电常驻（防失联）**：默认 `DEFAULT_LOW_POWER_MODE` 设为 `false`，确保新设备首次开机或重新烧录后可正常配网与进入配置门户。
+  - **微安级 Deep Sleep 循环**：开启电池模式后，设备将在数据成功上报后进入 Deep Sleep 深度睡眠，仅由 RTC 定时唤醒，极大地延长 18650 电池寿命（续航长达数月）。
+- **指令式远程配置唤醒**：
+  - **唤醒标志解析**：在数据上报的 HTTP 响应解析中，使用高效轻量的前缀匹配与字符串截取检测是否存在 `enter_config_mode` 唤醒标识。
+  - **5分钟超时保护**：检测到唤醒指令后，设备将拉起本地 Web 配置网页并在局域网中保持常驻在线，若 5 分钟内无任何配置操作，会自动重入 Deep Sleep 循环以防止电池过度消耗。
+- **快速连网超时约束**：
+  - 设置 8 秒快速连网时延，如在恶劣网络下超时将立刻转入下一次休眠循环，杜绝因反复尝试重连造成的无谓电量流失。
+
 ## [1.1.0] - 2026-07-06
 
 ### Added

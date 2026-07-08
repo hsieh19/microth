@@ -170,6 +170,41 @@ namespace WiFiHeal {
     bool is_in_ap_mode() {
         return current_state == STATE_AP_CONFIG;
     }
+
+    /**
+     * @brief 快速连接 Wi-Fi，带有超时控制，用于深睡眠唤醒后的高速联网
+     * 
+     * @return true 连接成功
+     * @return false 连接超时或失败
+     */
+    bool quick_connect_wifi() {
+        Serial.printf("[WiFi] 正在快速连接到 Wi-Fi: %s ...\n", global_wifi_ssid.c_str());
+        
+        // 开启 STA 模式
+        WiFi.mode(WIFI_STA);
+        // 在工作发送期允许 WiFi 使用 Modem-sleep（省电），但实际以尽快完成工作为目标
+        WiFi.setSleep(true); 
+        
+        // 发起连接
+        WiFi.begin(global_wifi_ssid.c_str(), global_wifi_password.c_str());
+        
+        unsigned long start_time = millis();
+        while (WiFi.status() != WL_CONNECTED) {
+            delay(50);
+            esp_task_wdt_reset(); // 喂狗，防止在连网过程中触发复位
+            
+            if (millis() - start_time > STA_CONNECT_TIMEOUT_MS) {
+                Serial.printf("[WiFi] 连接 Wi-Fi 超时 (%lu 毫秒)！\n", STA_CONNECT_TIMEOUT_MS);
+                WiFi.disconnect();
+                return false;
+            }
+        }
+        
+        Serial.print("[WiFi] 快速连接成功！IP 地址: ");
+        Serial.println(WiFi.localIP());
+        current_state = STATE_STA_CONNECTED;
+        return true;
+    }
 }
 
 #endif // WIFI_HEAL_H

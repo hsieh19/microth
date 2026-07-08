@@ -45,7 +45,7 @@ namespace HttpClient {
      * @return true 上报成功且服务端验证通过 (HTTP 200/201)
      * @return false 上报失败
      */
-    bool post_data_with_offset(float temp, float humi, unsigned long offset_sec) {
+    bool post_data_with_offset(float temp, float humi, unsigned long offset_sec, bool &out_enter_config) {
         if (!WiFiHeal::is_connected()) {
             return false;
         }
@@ -146,14 +146,29 @@ namespace HttpClient {
                     }
                 }
 
+                // 原生解析远程配置唤醒标志 enter_config_mode
+                int ecm_idx = response.indexOf("\"enter_config_mode\"");
+                if (ecm_idx != -1) {
+                    int colon_idx = response.indexOf(":", ecm_idx);
+                    if (colon_idx != -1) {
+                        int val_start = colon_idx + 1;
+                        while (val_start < response.length() && (response[val_start] == ' ' || response[val_start] == '\t')) {
+                            val_start++;
+                        }
+                        if (response.substring(val_start, val_start + 4) == "true") {
+                            out_enter_config = true;
+                        }
+                    }
+                }
+
                 // 比对当前配置是否发生变更并自动同步到 NVS
                 uint32_t current_interval_sec = global_report_interval_ms / 1000;
                 String target_key = (new_api_key.length() > 0) ? new_api_key : global_api_key;
                 uint32_t target_interval_sec = (new_interval_sec > 0) ? (uint32_t)new_interval_sec : current_interval_sec;
                 String target_name = (new_device_name.length() > 0) ? new_device_name : global_device_name;
 
-                Serial.printf("[HTTP] 解析结果 -> 提取上报周期: %ld 秒, 提取 API Key: %s, 提取设备别名: %s\n", 
-                    new_interval_sec, new_api_key.c_str(), new_device_name.c_str());
+                Serial.printf("[HTTP] 解析结果 -> 提取上报周期: %ld 秒, 提取 API Key: %s, 提取设备别名: %s, 远程配置唤醒: %s\n", 
+                    new_interval_sec, new_api_key.c_str(), new_device_name.c_str(), out_enter_config ? "是" : "否");
 
                 if (target_key != global_api_key || target_interval_sec != current_interval_sec || target_name != global_device_name) {
                     Serial.println("[HTTP] 检测到系统配置变更，开始自动同步！");
@@ -172,7 +187,8 @@ namespace HttpClient {
                         global_device_id,
                         target_name,
                         target_interval_sec,
-                        global_sensor_alert_enabled
+                        global_sensor_alert_enabled,
+                        global_low_power_mode
                     );
                 }
             } else if (http_code == 403) {
@@ -217,7 +233,8 @@ namespace HttpClient {
             unsigned long offset_sec = offset_ms / 1000;
 
             // 调用带时间偏移的发送接口进行数据补发
-            if (post_data_with_offset(item.temp, item.humi, offset_sec)) {
+            bool dummy_config = false;
+            if (post_data_with_offset(item.temp, item.humi, offset_sec, dummy_config)) {
                 // 发送成功，将此条数据出队，修改尾指针
                 cache_tail = (cache_tail + 1) % MAX_CACHE_SIZE;
                 cache_count--;
@@ -233,7 +250,7 @@ namespace HttpClient {
     /**
      * @brief 供主循环调用的统一发送接口 (封装了掉线自动缓存、自动链式补发)
      */
-    bool post_data(float temp, float humi) {
+    bool post_data(float temp, float humi, bool &out_enter_config) {
         // A. 掉线状态直接入队，避免请求超时挂起系统
         if (!WiFiHeal::is_connected()) {
             Serial.println("[HTTP] 上报终止: 当前 Wi-Fi 处于断开状态，数据已存入缓存。");
@@ -242,7 +259,7 @@ namespace HttpClient {
         }
 
         // B. 尝试进行本次实时数据上报
-        if (post_data_with_offset(temp, humi, 0)) {
+        if (post_data_with_offset(temp, humi, 0, out_enter_config)) {
             Serial.println("[HTTP] 实时数据上报成功！");
             // 实时数据发送成功，开始补发积压的历史缓存
             send_cached_data();

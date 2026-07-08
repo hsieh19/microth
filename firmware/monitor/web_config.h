@@ -134,6 +134,15 @@ namespace WebConfig {
         html += "</select>";
         html += "</div>";
 
+        // Power Supply Mode Option
+        html += "<div class='form-group'>";
+        html += "<label>供电模式 (省电策略)</label>";
+        html += "<select name='low_power' style='width: 100%; padding: 12px 14px; border: 1px solid #334155; background: rgba(15, 23, 42, 0.6); color: #f8fafc; border-radius: 10px; font-size: 15px;'>";
+        html += "  <option value='1'" + String(global_low_power_mode ? " selected" : "") + ">电池供电 (极致省电深睡眠)</option>";
+        html += "  <option value='0'" + String(!global_low_power_mode ? " selected" : "") + ">电源供电 (常驻在线模式)</option>";
+        html += "</select>";
+        html += "</div>";
+
         html += "<button type='submit'>保存配置并重启设备</button>";
         html += "</form>";
         html += "<div class='footer'>设备芯片: ESP32-C3 | I2C 传感器: SHT40</div>";
@@ -181,6 +190,7 @@ namespace WebConfig {
      * 所有不符合定义的 HTTP 请求均重定向至 192.168.4.1 (Web 首页)
      */
     void handle_captive_redirect() {
+        last_web_visit_time = millis();
         server.sendHeader("Location", "http://192.168.4.1/", true);
         server.send(302, "text/plain", ""); // 302 重定向
     }
@@ -191,11 +201,13 @@ namespace WebConfig {
     void init() {
         // 1. 配置表单页
         server.on("/", HTTP_GET, []() {
+            last_web_visit_time = millis();
             server.send(200, "text/html", get_html_page());
         });
 
         // 2. 提交表单保存接口〔S3 修复：对所有输入增加长度、范围校验〕
         server.on("/save", HTTP_POST, []() {
+            last_web_visit_time = millis();
             String ssid   = server.arg("ssid");
             String pass   = server.arg("pass");
             String url    = server.arg("url");
@@ -204,6 +216,7 @@ namespace WebConfig {
             String dev_name = server.arg("device_name");
             String interval_str = server.arg("interval_sec");
             String sensor_alert_str = server.arg("sensor_alert");
+            String low_power_str = server.arg("low_power");
 
             // 必填字段非空校验
             if (ssid.isEmpty() || url.isEmpty() || key.isEmpty() || dev_id.isEmpty()) {
@@ -241,9 +254,10 @@ namespace WebConfig {
             }
 
             bool sensor_alert = (sensor_alert_str == "1");
+            bool low_power = (low_power_str == "1");
 
             // 校验通过，保存到 NVS
-            NvsStorage::save_configs(ssid, pass, url, key, dev_id, dev_name, interval, sensor_alert);
+            NvsStorage::save_configs(ssid, pass, url, key, dev_id, dev_name, interval, sensor_alert, low_power);
 
             server.send(200, "text/html", get_success_page());
             save_success = true;

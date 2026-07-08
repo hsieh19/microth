@@ -3,6 +3,21 @@
 All notable changes to the monitor server project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-07-08
+
+### Added
+- **设备配置状态位 pending_config**：数据库新增字段，标记设备是否处于“待唤醒配置”状态，支持旧数据库 Schema 无损升级。
+- **设备配置唤醒接口**：
+  - 在数据上报接口响应中增加 `enter_config_mode` 控制标识，并在设备成功获取唤醒指令后自动复位 pending 状态。
+  - 新增 `POST /api/devices/{device_id}/trigger_config` API，允许向特定电池供电设备发送远程配置唤醒指令。
+- **大屏交互与视觉优化**：
+  - **远程配置动作按钮**：已注册设备列表表格中新增“远程配置”/“唤醒中...”状态切换按钮。
+  - **设备 IP 超链接直达**：自动将设备局域网 IP 包装为超链接，便于点击后一键直达唤醒状态下的设备本地配置页。
+  - **精细化时间卡片**：将“最后更新时间”重构为单行并排显示。日期使用灰白色显示，时间使用高亮发光霓虹蓝显示，并设置 20px 间距，提升大屏设计高级感。
+  - **无损自适应布局**：大屏页面最大宽度放宽至 1650px，调优了已注册表格的列宽比例，采用 `white-space: nowrap` 结合 ellipsis 防止别名或分组等字段换行，并在悬停时提供完整 title 提示。
+- **固件联动适配**（配套 Monitor 固件 1.2.0）：
+  - 支持“电池省电/插电常驻”模式分流。电池模式下进行极致深睡眠（Deep Sleep）循环，并在上报温湿度数据的窗口期主动获取服务端唤醒指令，唤醒后超时 5 分钟自动重入休眠以极大延长续航。
+
 ## [1.1.0] - 2026-07-06
 
 ### Added

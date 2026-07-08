@@ -46,9 +46,14 @@ async def init_db():
             );
         """)
         
-        # 6. 向后兼容性字段升级：增加 device_ip
+        # 6. 向后兼容性字段升级：增加 device_ip 和 pending_config
         try:
             await db.execute("ALTER TABLE registered_devices ADD COLUMN device_ip TEXT NOT NULL DEFAULT '';")
+        except Exception:
+            pass
+            
+        try:
+            await db.execute("ALTER TABLE registered_devices ADD COLUMN pending_config INTEGER NOT NULL DEFAULT 0;")
         except Exception:
             pass
 
@@ -205,7 +210,7 @@ async def get_registered_devices() -> List[Dict[str, Any]]:
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT device_id, device_name, group_name, device_ip, created_at FROM registered_devices ORDER BY created_at ASC"
+            "SELECT device_id, device_name, group_name, device_ip, pending_config, created_at FROM registered_devices ORDER BY created_at ASC"
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
@@ -217,7 +222,7 @@ async def get_device_by_id(device_id: str) -> Optional[Dict[str, Any]]:
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            "SELECT device_id, device_name, group_name, device_ip, created_at FROM registered_devices WHERE device_id = ?",
+            "SELECT device_id, device_name, group_name, device_ip, pending_config, created_at FROM registered_devices WHERE device_id = ?",
             (device_id,)
         ) as cursor:
             row = await cursor.fetchone()
@@ -277,4 +282,15 @@ async def unregister_device(device_id: str):
     """
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         await db.execute("DELETE FROM registered_devices WHERE device_id = ?", (device_id,))
+        await db.commit()
+
+async def set_pending_config(device_id: str, state: int):
+    """
+    更新指定设备的待配置唤醒状态
+    """
+    async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
+        await db.execute(
+            "UPDATE registered_devices SET pending_config = ? WHERE device_id = ?",
+            (state, device_id)
+        )
         await db.commit()

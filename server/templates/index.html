@@ -143,7 +143,7 @@
             padding: 30px 40px;
             box-sizing: border-box;
             overflow-y: auto;
-            max-width: 1400px;
+            max-width: 1650px;
             margin: 0 auto;
             width: 100%;
         }
@@ -788,7 +788,10 @@
                             <span class="card-title">最后更新时间</span>
                             <i class="fa-solid fa-clock-rotate-left card-icon"></i>
                         </div>
-                        <div class="card-value" id="updateTime" style="font-size: 26px; line-height: 48px; font-weight: 600; color: #e2e8f0; text-shadow:none;">--:--:--</div>
+                        <div class="card-value" id="updateTime" style="line-height: 48px; text-shadow:none; display: flex; align-items: baseline; justify-content: flex-start;">
+                            <span class="update-date" style="color: var(--text-secondary); font-size: 20px; font-weight: 500; margin-right: 20px;">----/--/--</span>
+                            <span class="update-time" style="color: var(--neon-blue); font-size: 24px; font-weight: 700; text-shadow: 0 0 10px rgba(56, 189, 248, 0.2);">--:--:--</span>
+                        </div>
                         <div class="card-footer">
                             <span class="status-dot dot-green" style="animation: pulse-green 3s infinite;"></span>
                             <span id="reportIntervalText">上报周期：--秒 (Ajax轮询中)</span>
@@ -835,9 +838,8 @@
                 </div>
             </div>
 
-            <!-- TAB 2: 设备注册 -->
             <div id="device-view" class="tab-content">
-                <div style="display: grid; grid-template-columns: 350px 1fr; gap: 24px; align-items: start;">
+                <div style="display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start;">
                     <!-- 左侧：注册表单 -->
                     <div class="settings-card" style="padding: 24px;">
                         <div class="settings-title" style="font-size: 16px; margin-bottom: 18px; padding-bottom: 12px; color: var(--neon-blue);">
@@ -881,12 +883,12 @@
                             <table class="glass-table">
                                 <thead>
                                     <tr>
-                                        <th>设备 ID</th>
-                                        <th>别名</th>
-                                        <th>所属分组</th>
-                                        <th>设备 IP</th>
-                                        <th>注册时间</th>
-                                        <th style="width: 160px; text-align: center;">操作</th>
+                                        <th style="width: 15%; white-space: nowrap;">设备 ID</th>
+                                        <th style="width: 15%; white-space: nowrap;">别名</th>
+                                        <th style="width: 15%; white-space: nowrap;">所属分组</th>
+                                        <th style="width: 15%; white-space: nowrap;">设备 IP</th>
+                                        <th style="width: 18%; white-space: nowrap;">注册时间</th>
+                                        <th style="width: 22%; text-align: center; white-space: nowrap;">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody id="registeredDevicesTable">
@@ -962,6 +964,7 @@
         let currentViewMode = "chart"; // 图表或表格切换："chart" | "table"
         let lastHistoryData = [];      // 缓存当前拉取的历史时序数据
         let lastUpdateTimeStamp = 0;   // 缓存最新温湿度数据的时间戳以判定是否需要同步刷新图表
+        let systemApiKey = "";
 
         // 获取 DOM 元素
         const deviceSelect = document.getElementById("deviceSelect");
@@ -1307,6 +1310,7 @@
                 const res = await fetch("/api/settings");
                 if (!res.ok) throw new Error("加载设置接口失败");
                 const config = await res.json();
+                systemApiKey = config.api_key || "";
                 
                 document.getElementById("cfgApiKey").value = config.api_key || "";
                 document.getElementById("cfgFeishuWebhook").value = config.feishu_webhook || "";
@@ -1403,16 +1407,26 @@
                     return;
                 }
                 
-                devices.forEach(dev => {
+            devices.forEach(dev => {
                     const dateStr = new Date(dev.created_at * 1000).toLocaleString('zh-CN', { hour12: false });
                     const tr = document.createElement("tr");
+                    const ipLink = dev.device_ip ? `<a href="http://${dev.device_ip}/" target="_blank" style="color: var(--neon-green); text-decoration: underline; font-weight: 500;">${dev.device_ip}</a>` : '<span style="color: var(--text-secondary);">未知 IP</span>';
                     tr.innerHTML = `
-                        <td style="font-weight: 600; color: var(--neon-blue);">${dev.device_id}</td>
-                        <td>${dev.device_name || '<span style="color: var(--text-secondary);">未命名</span>'}</td>
-                        <td><span style="background: rgba(56, 189, 248, 0.1); color: var(--neon-blue); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 500;">${dev.group_name}</span></td>
-                        <td style="font-family: monospace; font-size: 13px; color: var(--text-primary);">${dev.device_ip || '<span style="color: var(--text-secondary);">未知 IP</span>'}</td>
-                        <td style="font-size: 13px; color: var(--text-secondary);">${dateStr}</td>
+                        <td style="font-weight: 600; color: var(--neon-blue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;" title="${dev.device_id}">${dev.device_id}</td>
+                        <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;" title="${dev.device_name || ''}">${dev.device_name || '<span style="color: var(--text-secondary);">未命名</span>'}</td>
+                        <td style="white-space: nowrap;"><span style="background: rgba(56, 189, 248, 0.1); color: var(--neon-blue); padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 500; display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;" title="${dev.group_name}">${dev.group_name}</span></td>
+                        <td style="font-family: monospace; font-size: 13px; white-space: nowrap;">${ipLink}</td>
+                        <td style="font-size: 13px; color: var(--text-secondary); white-space: nowrap;">${dateStr}</td>
                         <td style="text-align: center; white-space: nowrap;">
+                            ${dev.pending_config === 1 ? `
+                                <button class="btn-edit-neon" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); color: var(--neon-amber); margin-right: 8px;" disabled>
+                                    <i class="fa-solid fa-spinner fa-spin"></i> 唤醒中...
+                                </button>
+                            ` : `
+                                <button class="btn-edit-neon" onclick="triggerRemoteConfig('${dev.device_id}')" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: var(--neon-green); margin-right: 8px;">
+                                    <i class="fa-solid fa-wifi"></i> 远程配置
+                                </button>
+                            `}
                             <button class="btn-edit-neon" onclick="editDevice('${dev.device_id}', '${dev.device_name || ""}', '${dev.group_name || ""}')" style="margin-right: 8px;">
                                 <i class="fa-solid fa-pen-to-square"></i> 编辑
                             </button>
@@ -1462,11 +1476,40 @@
         // 把删除函数挂载到全局 window 命名空间
         window.deleteDevice = deleteDevice;
 
+        // 发送配置唤醒指令
+        async function triggerRemoteConfig(deviceId) {
+            if (!deviceId) return;
+            if (!confirm(`确定要远程唤醒设备 ${deviceId} 的本地配置网页吗？\n下发指令后，设备会在下一次上报数据（最多等待上报周期时长）时自动常驻在线并开启网页服务。`)) {
+                return;
+            }
+            try {
+                const res = await fetch(`/api/devices/${deviceId}/trigger_config`, {
+                    method: "POST",
+                    headers: {
+                        "X-API-Key": systemApiKey
+                    }
+                });
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || "请求失败");
+                }
+                alert("配置唤醒指令发送成功！请等待设备在下一次数据上报时自动进入配置模式。");
+                await loadRegisteredDevicesTable();
+            } catch (err) {
+                console.error("发送配置唤醒指令出错:", err);
+                alert("发送配置唤醒指令出错: " + err.message);
+            }
+        }
+        window.triggerRemoteConfig = triggerRemoteConfig;
+
         // 重置实时卡片数值
         function resetCardValues() {
             latestTempEl.innerHTML = '--<span class="card-unit">°C</span>';
             latestHumiEl.innerHTML = '--<span class="card-unit">%</span>';
-            updateTimeEl.textContent = '--:--:--';
+            updateTimeEl.innerHTML = `
+                <span class="update-date" style="color: var(--text-secondary); font-size: 20px; font-weight: 500; margin-right: 20px;">----/--/--</span>
+                <span class="update-time" style="color: var(--neon-blue); font-size: 24px; font-weight: 700; text-shadow: 0 0 10px rgba(56, 189, 248, 0.2);">--:--:--</span>
+            `;
             tempStatusEl.textContent = '无数据';
             humiStatusEl.textContent = '无数据';
             tempDot.className = 'status-dot';
@@ -1525,9 +1568,16 @@
                     }
                 }
 
-                // 渲染时间戳
+                // 渲染日期与时间戳 (并排显示)
                 const date = new Date(data.ts * 1000);
-                updateTimeEl.textContent = date.toLocaleTimeString('zh-CN', { hour12: false });
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                const timeStr = date.toLocaleTimeString('zh-CN', { hour12: false });
+                updateTimeEl.innerHTML = `
+                    <span class="update-date" style="color: var(--text-secondary); font-size: 20px; font-weight: 500; margin-right: 20px;">${y}/${m}/${d}</span>
+                    <span class="update-time" style="color: var(--neon-blue); font-size: 24px; font-weight: 700; text-shadow: 0 0 10px rgba(56, 189, 248, 0.2);">${timeStr}</span>
+                `;
                 
                 // 渲染估算出的上报周期
                 if (data.report_interval !== undefined) {

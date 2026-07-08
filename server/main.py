@@ -191,12 +191,21 @@ async def receive_sensor_data(record: SensorRecord, _: None = Depends(verify_api
     db_device = await database.get_device_by_id(record.device_id)
     latest_device_name = db_device['device_name'] if db_device else (record.device_name or "")
     
+    # 检查该设备是否需要下发唤醒本地配置的指令
+    enter_config_mode = False
+    if db_device and db_device.get('pending_config') == 1:
+        enter_config_mode = True
+        # 下发指令后自动复位
+        await database.set_pending_config(record.device_id, 0)
+        logging.info(f"[Device] 成功将远程配置唤醒指令通过通信窗口带回设备 '{record.device_id}'")
+
     return {
         "status": "ok",
         "ts": ts,
         "report_interval": settings.REPORT_INTERVAL_SEC,
         "api_key": settings.API_KEY,
-        "device_name": latest_device_name
+        "device_name": latest_device_name,
+        "enter_config_mode": enter_config_mode
     }
 
 @app.get("/api/latest")
@@ -328,3 +337,21 @@ async def serve_dashboard_page(request: Request):
     页面：渲染温湿度监控大屏主页 (动态注入服务端版本号)
     """
     return templates.TemplateResponse(request, "index.html", {"version": SERVER_VERSION})
+
+@app.post("/api/devices/{device_id}/trigger_config")
+async def trigger_device_config(device_id: str, _: None = Depends(verify_api_key)):
+    """
+    将指定设备标记为待配置唤醒状态
+    """
+    # 校验 device_id 格式，防范注入/XSS
+    if not re.match(r'^[a-zA-Z0-9_\-]+$', device_id):
+        raise HTTPException(status_code=400, detail="Invalid device_id format")
+    
+    # 检查设备是否注册
+    if not await database.is_device_registered(device_id):
+        raise HTTPException(status_code=404, detail="Device not registered")
+    
+    # 置位
+    await database.set_pending_config(device_id, 1)
+    logging.info(f"[Device] 管理员向设备 '{device_id}' 发送了配置唤醒指令。")
+    return {"status": "ok"}
