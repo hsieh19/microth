@@ -59,7 +59,7 @@ async def init_db():
 
         await db.commit()
         
-        # 6. 向后兼容性处理：若设备注册表为空，则将已有上报历史的设备自动迁移注册
+        # 7. [M5 修复] 向后兼容性处理：若设备注册表为空，则将已有上报历史的设备自动迁移注册
         async with db.execute("SELECT COUNT(*) FROM registered_devices") as cursor:
             reg_count = (await cursor.fetchone())[0]
             

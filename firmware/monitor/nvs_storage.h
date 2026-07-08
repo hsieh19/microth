@@ -30,16 +30,18 @@ namespace NvsStorage {
         global_device_id = prefs.getString("device_id", DEFAULT_DEVICE_ID);
         // 加载设备别名名称
         global_device_name = prefs.getString("device_name", DEFAULT_DEVICE_NAME);
-        // 加载上报周期 (以秒为单位读取，然后转换为毫秒。若不存在则用毫秒默认值转换为秒保存/读取)
+        // 加载采集周期与上报周期 (以秒为单位读取，然后转换为毫秒)
+        uint32_t sample_sec = prefs.getUInt("sample_sec", DEFAULT_SAMPLE_INTERVAL_MS / 1000);
+        global_sample_interval_ms = (unsigned long)sample_sec * 1000;
         uint32_t interval_sec = prefs.getUInt("interval_sec", DEFAULT_REPORT_INTERVAL_MS / 1000);
         global_report_interval_ms = (unsigned long)interval_sec * 1000;
         // 加载传感器未连接报警开关
         global_sensor_alert_enabled = prefs.getBool("sensor_alert", DEFAULT_SENSOR_ALERT_ENABLED);
         // 加载极致省电工作模式开关
         global_low_power_mode = prefs.getBool("low_power", DEFAULT_LOW_POWER_MODE);
-
+ 
         prefs.end();
-
+ 
         Serial.println("[NVS] 配置加载完毕：");
         Serial.printf("  SSID: %s\n", global_wifi_ssid.c_str());
         Serial.printf("  Server URL: %s\n", global_server_url.c_str());
@@ -50,33 +52,35 @@ namespace NvsStorage {
                             ? (global_api_key.substring(0, 4) + String("****"))
                             : "****";
         Serial.printf("  API Key: %s\n", masked_key.c_str());
+        Serial.printf("  采集周期: %lu 毫秒\n", global_sample_interval_ms);
         Serial.printf("  上报周期: %lu 毫秒\n", global_report_interval_ms);
         Serial.printf("  传感器报警: %s\n", global_sensor_alert_enabled ? "已启用" : "已禁用");
         Serial.printf("  极致省电模式: %s\n", global_low_power_mode ? "电池供电 (深睡眠)" : "电源供电 (常驻在线)");
-
+ 
     }
-
+ 
     /**
      * @brief 保存新配置到 NVS 闪存，并更新运行期的全局配置变量
      */
-    void save_configs(String ssid, String pass, String url, String key, String dev_id, String dev_name, uint32_t interval_sec, bool sensor_alert, bool low_power) {
+    void save_configs(String ssid, String pass, String url, String key, String dev_id, String dev_name, uint32_t sample_sec, uint32_t interval_sec, bool sensor_alert, bool low_power) {
         Preferences prefs;
         
         // 以读写模式打开命名空间
         prefs.begin(NAMESPACE, false);
-
+ 
         prefs.putString("wifi_ssid", ssid);
         prefs.putString("wifi_pass", pass);
         prefs.putString("server_url", url);
         prefs.putString("api_key", key);
         prefs.putString("device_id", dev_id);
         prefs.putString("device_name", dev_name);
+        prefs.putUInt("sample_sec", sample_sec);
         prefs.putUInt("interval_sec", interval_sec);
         prefs.putBool("sensor_alert", sensor_alert);
         prefs.putBool("low_power", low_power);
-
+ 
         prefs.end();
-
+ 
         // 同时更新当前的全局运行变量，方便免重启测试
         global_wifi_ssid = ssid;
         global_wifi_password = pass;
@@ -84,6 +88,7 @@ namespace NvsStorage {
         global_api_key = key;
         global_device_id = dev_id;
         global_device_name = dev_name;
+        global_sample_interval_ms = (unsigned long)sample_sec * 1000;
         global_report_interval_ms = (unsigned long)interval_sec * 1000;
         global_sensor_alert_enabled = sensor_alert;
         global_low_power_mode = low_power;

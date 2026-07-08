@@ -149,7 +149,7 @@ namespace WiFiHeal {
                 // 则假定为临时断电或路由器短暂重启，切回 STA 重试，防止设备无限卡死在 AP
                 if (now - state_timer > 300000) {
                     Serial.println("[WiFi] AP 模式超过 5 分钟无人配置，自动退避切回 STA 重新尝试连接。");
-                    WebConfig::stop_ap_server();
+                    // [M4 修复] 移除冗余的 stop_ap_server() 调用 —— transition_to() 内部已执行清理
                     transition_to(STATE_STA_CONNECTING);
                 }
                 break;

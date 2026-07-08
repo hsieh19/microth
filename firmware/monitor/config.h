@@ -10,9 +10,10 @@
 #define DEFAULT_API_KEY       "your-32-char-secret-key-here"
 #define DEFAULT_DEVICE_ID     "esp32-01"
 #define DEFAULT_DEVICE_NAME   "默认温湿度设备"
+#define DEFAULT_SAMPLE_INTERVAL_MS 30000
 #define DEFAULT_REPORT_INTERVAL_MS 300000
 
-#define FIRMWARE_VERSION     "1.1.0"
+#define FIRMWARE_VERSION     "1.2.1"
 #define DEFAULT_SENSOR_ALERT_ENABLED true
 #define DEFAULT_LOW_POWER_MODE false
 
@@ -23,6 +24,7 @@ extern String global_server_url;
 extern String global_api_key;
 extern String global_device_id;
 extern String global_device_name;
+extern unsigned long global_sample_interval_ms;
 extern unsigned long global_report_interval_ms;
 extern bool global_sensor_alert_enabled;
 extern bool global_low_power_mode;

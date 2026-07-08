@@ -860,12 +860,12 @@
                                 <input type="text" id="regGroupName" placeholder="" list="groupDatalist">
                                 <datalist id="groupDatalist"></datalist>
                             </div>
-                            <div style="display: flex; gap: 12px; margin-top: 10px;">
-                                <button type="submit" class="btn-save" id="btnRegisterSubmit" style="flex: 1; padding: 14px 20px; justify-content: center; align-items: center;">
+                            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                <button type="submit" class="btn-save" id="btnRegisterSubmit" style="flex: 1; padding: 12px 6px; justify-content: center; align-items: center; white-space: nowrap; font-size: 13px; gap: 6px;">
                                     <i class="fa-solid fa-floppy-disk"></i>
                                     <span id="btnRegisterSubmitText">注册设备</span>
                                 </button>
-                                <button type="button" id="btnCancelEdit" style="display: none; flex: 1; padding: 14px 20px; border-radius: 12px; font-size: 15px; font-weight: 700; align-items: center; justify-content: center; gap: 6px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--neon-rose); cursor: pointer; transition: all 0.2s ease;">
+                                <button type="button" id="btnCancelEdit" style="display: none; flex: 1; padding: 12px 6px; border-radius: 12px; font-size: 13px; font-weight: 700; align-items: center; justify-content: center; gap: 6px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--neon-rose); cursor: pointer; transition: all 0.2s ease; white-space: nowrap;">
                                     <i class="fa-solid fa-xmark"></i>
                                     <span>取消</span>
                                 </button>
@@ -996,6 +996,9 @@
             
             // 每 30 秒更新一次设备下拉列表，方便自动发现新设备
             setInterval(loadDevices, 30000);
+
+            // 每 5 秒刷新一次已注册设备列表，实时同步远程配置唤醒状态与 IP
+            setInterval(loadRegisteredDevicesTable, 5000);
         });
 
         // 绑定事件监听

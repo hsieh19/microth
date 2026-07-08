@@ -15,6 +15,7 @@ namespace WebConfig {
 
     // 标志是否成功保存了参数
     static bool save_success = false;
+    static bool routes_initialized = false;
 
     /**
      * @brief 渲染 HTML 配置页面 (响应式、毛玻璃微光现代设计风格)
@@ -119,10 +120,18 @@ namespace WebConfig {
         html += "<input type='text' name='device_name' value='" + global_device_name + "' autocomplete='off'>";
         html += "</div>";
 
+        // Sample Interval
+        html += "<div class='form-group'>";
+        html += "<label>传感器采集周期 (秒)</label>";
+        html += "<input type='number' name='sample_sec' min='5' max='86400' value='" + String(global_sample_interval_ms / 1000) + "' required>";
+        html += "<span style='font-size: 11px; color: #64748b;'>电池模式下也是休眠唤醒周期</span>";
+        html += "</div>";
+
         // Report Interval
         html += "<div class='form-group'>";
-        html += "<label>上报周期 (秒)</label>";
+        html += "<label>数据上报周期 (秒)</label>";
         html += "<input type='number' name='interval_sec' min='5' max='86400' value='" + String(global_report_interval_ms / 1000) + "' required>";
+        html += "<span style='font-size: 11px; color: #64748b;'>建议是采集周期的整数倍</span>";
         html += "</div>";
 
         // Sensor Alert Option
@@ -199,6 +208,7 @@ namespace WebConfig {
      * @brief 初始化 Web 路由配置。此函数需在系统启动 (setup) 阶段调用一次，避免重复注册路由。
      */
     void init() {
+        if (routes_initialized) return;
         // 1. 配置表单页
         server.on("/", HTTP_GET, []() {
             last_web_visit_time = millis();
@@ -214,6 +224,7 @@ namespace WebConfig {
             String key    = server.arg("key");
             String dev_id = server.arg("device_id");
             String dev_name = server.arg("device_name");
+            String sample_str = server.arg("sample_sec");
             String interval_str = server.arg("interval_sec");
             String sensor_alert_str = server.arg("sensor_alert");
             String low_power_str = server.arg("low_power");
@@ -246,28 +257,42 @@ namespace WebConfig {
                 return;
             }
 
-            // 上报周期范围校验：必须在 [5, 86400] 秒范围内，防止 0 导致无限循环上报
+            // 周期范围与关系安全校验：必须在 [5, 86400] 秒范围内
+            uint32_t sample = sample_str.toInt();
+            if (sample < 5 || sample > 86400) {
+                Serial.printf("[WebConfig] 采集周期字段不合法 (%u)，已回退为默认 30 秒。\n", sample);
+                sample = 30;
+            }
+
             uint32_t interval = interval_str.toInt();
             if (interval < 5 || interval > 86400) {
-                Serial.printf("[WebConfig] 上报周期字段不合法 (%u)，已回退为默认 60 秒。\n", interval);
-                interval = 60; // 回退安全默认值，不直接拒绝请求
+                Serial.printf("[WebConfig] 上报周期字段不合法 (%u)，已回退为默认 300 秒。\n", interval);
+                interval = 300;
+            }
+
+            // 强制规则：数据上报周期不得小于数据采集周期
+            if (interval < sample) {
+                Serial.println("[WebConfig] 检测到上报周期小于采集周期，自动将其调整为采集周期对齐。");
+                interval = sample;
             }
 
             bool sensor_alert = (sensor_alert_str == "1");
             bool low_power = (low_power_str == "1");
 
             // 校验通过，保存到 NVS
-            NvsStorage::save_configs(ssid, pass, url, key, dev_id, dev_name, interval, sensor_alert, low_power);
+            NvsStorage::save_configs(ssid, pass, url, key, dev_id, dev_name, sample, interval, sensor_alert, low_power);
 
             server.send(200, "text/html", get_success_page());
             save_success = true;
         });
+        routes_initialized = true;
     }
 
     /**
      * @brief 启动 AP 配网服务 (AP模式 + WebServer + DNSServer)
      */
     void start_ap_server() {
+        init();
         Serial.println("[WebConfig] 启动 AP 配网模式...");
         
         // 1. 设置 AP 模式 IP 地址段 (192.168.4.1)
@@ -297,6 +322,7 @@ namespace WebConfig {
      * @brief 启动 STA 局域网配置网页服务
      */
     void start_sta_server() {
+        init();
         Serial.println("[WebConfig] 启动 STA 局域网网页配置服务...");
         Serial.print("[WebConfig] 局域网配置 URL: http://");
         Serial.print(WiFi.localIP());

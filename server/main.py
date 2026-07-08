@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Optional
+from typing import Optional, List
 from logging.handlers import TimedRotatingFileHandler
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException, Depends, Request, Query
@@ -103,38 +103,43 @@ app = FastAPI(
 # 绑定模板引擎，用于渲染 Glassmorphism 大屏主页
 templates = Jinja2Templates(directory="templates")
 
-# 动态加载服务端版本号，作为 Single Source of Truth
+# [M3 修复] 动态加载服务端版本号，使用 __file__ 绝对路径，避免工作目录偏移导致读取失败
+# 与 lifespan 中 sync_firmware_version() 的路径解析风格保持一致
 SERVER_VERSION = "1.0.0"
 try:
-    import os
-    import json
-    with open("server/version.json", "r", encoding="utf-8") as f:
+    _v_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
+    with open(_v_path, "r", encoding="utf-8") as f:
         _v_data = json.load(f)
         SERVER_VERSION = _v_data.get("version", "1.0.0")
 except Exception:
-    try:
-        with open("version.json", "r", encoding="utf-8") as f:
-            _v_data = json.load(f)
-            SERVER_VERSION = _v_data.get("version", "1.0.0")
-    except Exception:
-        pass
+    pass
 
 # ==================== Pydantic 入参模型 ====================
-class SensorRecord(BaseModel):
-    device_id: str = Field(..., description="设备唯一标识", min_length=1, max_length=32)
+class CompactRecord(BaseModel):
     temp: float = Field(..., description="温度 data (摄氏度)", ge=-1000.0, le=100.0)
     humi: float = Field(..., description="湿度 data (百分比)", ge=-1000.0, le=100.0)
     offset_sec: int = Field(default=0, description="相对于当前接收时间的采集偏移秒数", ge=0)
+
+class SensorRecord(BaseModel):
+    device_id: str = Field(..., description="设备唯一标识", min_length=1, max_length=32)
     device_name: Optional[str] = Field(default="", description="设备别名名称")
     device_ip: Optional[str] = Field(default="", description="设备本地局域网 IP")
     sensor_alert_enabled: bool = Field(default=True, description="是否启用传感器故障飞书报警")
+    
+    # 兼容旧版本单条数据上报
+    temp: Optional[float] = Field(default=None, description="温度 data (摄氏度)", ge=-1000.0, le=100.0)
+    humi: Optional[float] = Field(default=None, description="湿度 data (百分比)", ge=-1000.0, le=100.0)
+    offset_sec: int = Field(default=0, description="相对于当前接收时间的采集偏移秒数", ge=0)
+    
+    # 批量合并数据包上报
+    records: Optional[List[CompactRecord]] = Field(default=None, description="合并历史数据数组")
 
     # O1 修复：对 device_id 增加正则格式校验，防止特殊字符导致日志污染或前端 XSS 风险
     @field_validator('device_id')
     @classmethod
     def validate_device_id(cls, v: str) -> str:
         if not re.match(r'^[a-zA-Z0-9_\-]+$', v):
-            raise ValueError("device_id 只允许包含字母、数字、下划线和连字符")
+            raise ValueError("device_id 只允许包含字母、数字、下划线 and 连字符")
         return v
 
 # ==================== 安全校验拦截器 ====================
@@ -167,16 +172,45 @@ async def receive_sensor_data(record: SensorRecord, _: None = Depends(verify_api
     last_record = await database.get_latest_record_for_device(record.device_id)
 
     # 2. 插入时序数据到 SQLite
-    ts = await database.add_record(record.device_id, record.temp, record.humi, record.offset_sec)
-    
-    logging.info(f"[Data] 接收设备 '{record.device_id}' 数据成功 -> 温度: {record.temp:.2f} °C, 湿度: {record.humi:.2f} %")
-    
+    import time
+    ts = int(time.time())
+    latest_temp = None
+    latest_humi = None
+
+    if record.records and len(record.records) > 0:
+        # 批量数据插入
+        for r in record.records:
+            ts = await database.add_record(record.device_id, r.temp, r.humi, r.offset_sec)
+        
+        # 寻找最新一条数据（即 offset_sec 最小，最接近当前的那个记录）
+        latest_offset = 999999
+        for r in record.records:
+            if r.offset_sec < latest_offset:
+                latest_offset = r.offset_sec
+                latest_temp = r.temp
+                latest_humi = r.humi
+        
+        if latest_temp is None:
+            latest_temp = record.records[-1].temp
+            latest_humi = record.records[-1].humi
+        
+        logging.info(f"[Data] 接收设备 '{record.device_id}' 批量数据成功 -> 记录数: {len(record.records)}, 最新温度: {latest_temp:.2f} °C, 最新湿度: {latest_humi:.2f} %")
+    else:
+        # 向下兼容单条数据上报
+        if record.temp is not None and record.humi is not None:
+            ts = await database.add_record(record.device_id, record.temp, record.humi, record.offset_sec)
+            latest_temp = record.temp
+            latest_humi = record.humi
+            logging.info(f"[Data] 接收设备 '{record.device_id}' 单条数据成功 -> 温度: {record.temp:.2f} °C, 湿度: {record.humi:.2f} %")
+        else:
+            raise HTTPException(status_code=400, detail="Missing sensor data (records or temp/humi must be provided)")
+
     # 3. 状态机检查并触发飞书消息推送 (防轰炸冷却)
     # 首先处理温湿度传感器连接断开/恢复的警报逻辑
     await alerts.check_sensor_status_and_alert(
         record.device_id, 
-        record.temp, 
-        record.humi, 
+        latest_temp, 
+        latest_humi, 
         record.sensor_alert_enabled,
         record.device_name or "",
         record.device_ip or "",
@@ -184,8 +218,8 @@ async def receive_sensor_data(record: SensorRecord, _: None = Depends(verify_api
     )
     
     # 接着如果传感器状态是正常的，我们才去进行正常的温湿度越限警报判断
-    if record.temp != -999.0:
-        await alerts.check_and_trigger_alerts(record.device_id, record.temp, record.humi)
+    if latest_temp != -999.0:
+        await alerts.check_and_trigger_alerts(record.device_id, latest_temp, latest_humi)
     
     # 4. 获取数据库中最新的设备别名以便同步回固件端
     db_device = await database.get_device_by_id(record.device_id)
