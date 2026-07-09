@@ -43,6 +43,7 @@ namespace Sensor {
     void init() {
         Serial.println("[Sensor] 初始化 I2C 总线...");
         Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+        delay(50); // 给 I2C 总线和传感器充足的电平稳定与上电就绪时间
         failed_count = 0;
     }
 

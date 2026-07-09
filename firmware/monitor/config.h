@@ -42,7 +42,7 @@ const int HTTP_TIMEOUT_MS = 4000;
 // 极致省电模式相关常量
 const int BOOT_PIN = 9;                           // BOOT 引脚 (GPIO 9)，用于手动强制触发配网模式
 const unsigned long CONFIG_MODE_TIMEOUT_MS = 300000; // 配置模式无操作自动休眠超时时间 (5分钟)
-const unsigned long STA_CONNECT_TIMEOUT_MS = 8000;   // 快速联网最大等待时间 (8秒)
+const unsigned long STA_CONNECT_TIMEOUT_MS = 15000;  // 快速联网最大等待时间 (15秒)
 
 // I2C 硬件配置
 const int I2C_SDA_PIN = 8;

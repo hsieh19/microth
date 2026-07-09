@@ -182,8 +182,8 @@ namespace WiFiHeal {
         
         // 开启 STA 模式
         WiFi.mode(WIFI_STA);
-        // 在工作发送期允许 WiFi 使用 Modem-sleep（省电），但实际以尽快完成工作为目标
-        WiFi.setSleep(true); 
+        // 快速连接期关闭 WiFi Modem-sleep 以加速连接并防止 DHCP 丢包导致超时失效
+        WiFi.setSleep(false); 
         
         // 发起连接
         WiFi.begin(global_wifi_ssid.c_str(), global_wifi_password.c_str());

@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **RTC 内存首次上电未清零修复 [H3]**：在极致省电模式启动的最初位置，通过 `esp_sleep_get_wakeup_cause()` 检查唤醒原因，当非定时器唤醒（首次上电或手动复位）时，强制清零 RTC 缓存计数器，防止 RTC_DATA_ATTR 随机垃圾值导致设备缓存异常崩溃。
   - **冗余 stop_ap_server() 调用移除 [M4]**：去除了 `wifi_heal.h` 中 AP 模式超时退避时冗余调用的 `WebConfig::stop_ap_server()`，优化精简了 WiFi 状态机过渡动作。
   - **重复响应解析逻辑重构 [L1]**：在 `http_client.h` 中提取了公共的 JSON 解析与 NVS 同步函数 `parse_and_sync_response()`，并精简了 `post_data_with_offset` 和 `post_bulk_data`，消除了约 100 行的重复代码，显著提升了固件的网络通信层可维护性。
+  - **省电模式网络与采集失联修复**：
+    - **I2C 唤醒稳定延迟**：在 `Sensor::init()` 的 `Wire.begin` 之后加入了 `delay(50)` 延迟，确保从 Deep Sleep 唤醒后，I2C 总线和 SHT40 传感器有足够时间初始化和电平稳定，彻底解决了因首次数据采集失败导致设备反复进入休眠而无法联网上传的 Bug。
+    - **快速连网省电模式冲突解决**：将 `quick_connect_wifi()` 中的 `WiFi.setSleep(true)` 修改为 `WiFi.setSleep(false)`，防止连网握手期间由于 Modem-sleep 导致的 DHCP 包丢失。
+    - **快速连接超时放宽**：将 `STA_CONNECT_TIMEOUT_MS` 从 8 秒放宽至 15 秒，确保信号弱或路由器响应慢时能高成功率接入网络。
 
 ## [1.2.0] - 2026-07-08
 
