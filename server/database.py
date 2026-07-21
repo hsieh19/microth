@@ -136,21 +136,61 @@ async def get_history_records(
     end_ts: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
-    查询指定设备在特定时间段内或过去 N 天内的所有温湿度时序数据，按时间升序排列
+    查询指定设备在特定时间段内或过去 N 天内的所有温湿度时序数据，按时间升序排列（引入动态降采样聚合）
     """
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         db.row_factory = aiosqlite.Row
+        
+        # 1. 确定时间范围和时间差（秒）
         if start_ts is not None and end_ts is not None:
-            # 自定义时间段查询
-            query = "SELECT ts, temp, humi FROM sensor_records WHERE device_id = ? AND ts >= ? AND ts <= ? ORDER BY ts ASC LIMIT 3000"
-            params = (device_id, start_ts, end_ts)
+            diff_sec = end_ts - start_ts
+            time_filter = "ts >= ? AND ts <= ?"
+            params_time = (start_ts, end_ts)
         else:
-            # 快捷天数查询 (默认 1 天)
             actual_days = days if days is not None else 1
-            cutoff_ts = int(time.time()) - actual_days * 86400
-            query = "SELECT ts, temp, humi FROM sensor_records WHERE device_id = ? AND ts >= ? ORDER BY ts ASC LIMIT 3000"
-            params = (device_id, cutoff_ts)
+            diff_sec = actual_days * 86400
+            cutoff_ts = int(time.time()) - diff_sec
+            time_filter = "ts >= ?"
+            params_time = (cutoff_ts,)
+
+        # 2. 根据时间差选择不同的聚合策略
+        if diff_sec <= 86400:
+            # 24小时内：不聚合，展示原始细节
+            query = f"""
+                SELECT ts, temp, humi 
+                FROM sensor_records 
+                WHERE device_id = ? AND {time_filter} 
+                ORDER BY ts ASC 
+                LIMIT 3000
+            """
+        elif diff_sec <= 30 * 86400:
+            # 30天内：按 0.5 小时 (1800秒) 聚合
+            query = f"""
+                SELECT 
+                    (ts / 1800) * 1800 AS ts,
+                    COALESCE(AVG(CASE WHEN temp <> -999 THEN temp ELSE NULL END), -999) AS temp,
+                    COALESCE(AVG(CASE WHEN humi <> -999 THEN humi ELSE NULL END), -999) AS humi
+                FROM sensor_records
+                WHERE device_id = ? AND {time_filter}
+                GROUP BY ts / 1800
+                ORDER BY ts ASC
+                LIMIT 3000
+            """
+        else:
+            # 30天以上：按天 (86400秒) 聚合
+            query = f"""
+                SELECT 
+                    (ts / 86400) * 86400 AS ts,
+                    COALESCE(AVG(CASE WHEN temp <> -999 THEN temp ELSE NULL END), -999) AS temp,
+                    COALESCE(AVG(CASE WHEN humi <> -999 THEN humi ELSE NULL END), -999) AS humi
+                FROM sensor_records
+                WHERE device_id = ? AND {time_filter}
+                GROUP BY ts / 86400
+                ORDER BY ts ASC
+                LIMIT 3000
+            """
             
+        params = (device_id,) + params_time
         async with db.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
