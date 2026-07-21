@@ -133,10 +133,11 @@ async def get_history_records(
     device_id: str,
     days: Optional[int] = None,
     start_ts: Optional[int] = None,
-    end_ts: Optional[int] = None
+    end_ts: Optional[int] = None,
+    agg_interval: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """
-    查询指定设备在特定时间段内或过去 N 天内的所有温湿度时序数据，按时间升序排列（引入动态降采样聚合）
+    查询指定设备在特定时间段内或过去 N 天内的所有温湿度时序数据，按时间升序排列（支持动态聚合步长）
     """
     async with aiosqlite.connect(settings.DB_PATH, timeout=20.0) as db:
         db.row_factory = aiosqlite.Row
@@ -153,9 +154,9 @@ async def get_history_records(
             time_filter = "ts >= ?"
             params_time = (cutoff_ts,)
 
-        # 2. 根据时间差选择不同的聚合策略
-        if diff_sec <= 86400:
-            # 24小时内：不聚合，展示原始细节
+        # 2. 动态聚合策略
+        if agg_interval is None or agg_interval <= 0:
+            # 原始数据不聚合
             query = f"""
                 SELECT ts, temp, humi 
                 FROM sensor_records 
@@ -163,34 +164,22 @@ async def get_history_records(
                 ORDER BY ts ASC 
                 LIMIT 3000
             """
-        elif diff_sec <= 30 * 86400:
-            # 30天内：按 0.5 小时 (1800秒) 聚合
-            query = f"""
-                SELECT 
-                    (ts / 1800) * 1800 AS ts,
-                    COALESCE(AVG(CASE WHEN temp <> -999 THEN temp ELSE NULL END), -999) AS temp,
-                    COALESCE(AVG(CASE WHEN humi <> -999 THEN humi ELSE NULL END), -999) AS humi
-                FROM sensor_records
-                WHERE device_id = ? AND {time_filter}
-                GROUP BY ts / 1800
-                ORDER BY ts ASC
-                LIMIT 3000
-            """
+            params = (device_id,) + params_time
         else:
-            # 30天以上：按天 (86400秒) 聚合
+            # 动态步长聚合
             query = f"""
                 SELECT 
-                    (ts / 86400) * 86400 AS ts,
+                    (ts / ?) * ? AS ts,
                     COALESCE(AVG(CASE WHEN temp <> -999 THEN temp ELSE NULL END), -999) AS temp,
                     COALESCE(AVG(CASE WHEN humi <> -999 THEN humi ELSE NULL END), -999) AS humi
                 FROM sensor_records
                 WHERE device_id = ? AND {time_filter}
-                GROUP BY ts / 86400
+                GROUP BY ts / ?
                 ORDER BY ts ASC
                 LIMIT 3000
             """
+            params = (agg_interval, agg_interval, device_id) + params_time + (agg_interval,)
             
-        params = (device_id,) + params_time
         async with db.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]

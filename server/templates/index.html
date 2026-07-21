@@ -806,9 +806,23 @@
                             <i class="fa-solid fa-chart-line" style="color: var(--neon-blue)"></i>
                             <span>温湿度历史数据查看</span>
                         </div>
-                        <div class="btn-group" id="viewModeGroup">
-                            <button class="active" data-mode="chart" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-chart-line" style="margin-right: 4px;"></i>趋势图</button>
-                            <button data-mode="table" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-table" style="margin-right: 4px;"></i>数据表</button>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <!-- 聚合选择下拉框 -->
+                            <div class="selector-group" style="margin: 0; background: rgba(15, 23, 42, 0.45); border: 1px solid var(--glass-border); border-radius: 8px; padding: 2px 8px; display: flex; align-items: center;">
+                                <label for="aggIntervalSelect" style="margin: 0; font-size: 12px; color: var(--text-secondary); white-space: nowrap;">时间聚合：</label>
+                                <select id="aggIntervalSelect" style="background: transparent; border: none; color: var(--neon-blue); font-size: 12px; font-weight: 600; padding: 2px 0; outline: none; cursor: pointer; min-width: 90px;">
+                                    <option value="0" style="background: #0f172a; color: #fff;">原始数据</option>
+                                    <option value="1800" style="background: #0f172a; color: #fff;">30分钟聚合</option>
+                                    <option value="3600" style="background: #0f172a; color: #fff;">1小时聚合</option>
+                                    <option value="21600" style="background: #0f172a; color: #fff;">6小时聚合</option>
+                                    <option value="43200" style="background: #0f172a; color: #fff;">12小时聚合</option>
+                                    <option value="86400" style="background: #0f172a; color: #fff;">24小时聚合</option>
+                                </select>
+                            </div>
+                            <div class="btn-group" id="viewModeGroup">
+                                <button class="active" data-mode="chart" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-chart-line" style="margin-right: 4px;"></i>趋势图</button>
+                                <button data-mode="table" style="padding: 6px 12px; font-size: 12px;"><i class="fa-solid fa-table" style="margin-right: 4px;"></i>数据表</button>
+                            </div>
                         </div>
                     </div>
                     <div class="chart-container">
@@ -1027,6 +1041,14 @@
                 }
             });
 
+            // 聚合选择下拉框改变
+            const aggIntervalSelect = document.getElementById("aggIntervalSelect");
+            aggIntervalSelect.addEventListener("change", async () => {
+                if (currentDeviceId) {
+                    await drawChart();
+                }
+            });
+
             // 时间段快捷按钮切换
             timeRangeGroup.addEventListener("click", async (e) => {
                 if (e.target.tagName === "BUTTON") {
@@ -1041,6 +1063,16 @@
                     isCustomRange = false;
 
                     currentDays = parseInt(e.target.dataset.days);
+                    
+                    // 联动切换默认聚合粒度：24h->原始(0), 7d->30m(1800), 30d->1h(3600)
+                    if (currentDays === 1) {
+                        aggIntervalSelect.value = "0";
+                    } else if (currentDays === 7) {
+                        aggIntervalSelect.value = "1800";
+                    } else if (currentDays === 30) {
+                        aggIntervalSelect.value = "3600";
+                    }
+
                     if (currentDeviceId) {
                         await drawChart();
                     }
@@ -1633,7 +1665,8 @@
         async function drawChart() {
             if (!currentDeviceId) return;
             try {
-                let url = `/api/history?device_id=${currentDeviceId}`;
+                const step = parseInt(document.getElementById("aggIntervalSelect").value || "0");
+                let url = `/api/history?device_id=${currentDeviceId}&agg_interval=${step}`;
                 if (isCustomRange) {
                     url += `&start_ts=${startTs}&end_ts=${endTs}`;
                 } else {
@@ -1669,11 +1702,29 @@
 
                 historyData.forEach(item => {
                     const date = new Date(item.ts * 1000);
-                    // 如果时间差小于等于24小时，显示具体时分；否则跨天显示月日和时分
-                    if (diffSec <= 86400) {
-                        labels.push(date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }));
+                    // 根据选中的步长 step 自适应格式化 X 轴标签
+                    if (step === 0) {
+                        // 原始数据
+                        if (diffSec <= 86400) {
+                            labels.push(date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }));
+                        } else {
+                            labels.push(`${date.getMonth()+1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`);
+                        }
                     } else {
-                        labels.push(`${date.getMonth()+1}/${date.getDate()} ${date.getHours()}:00`);
+                        // 聚合数据
+                        if (step <= 3600) {
+                            // 1小时及以下聚合：显示月日时分以支持半点
+                            const hh = String(date.getHours()).padStart(2, '0');
+                            const mm = String(date.getMinutes()).padStart(2, '0');
+                            labels.push(`${date.getMonth()+1}/${date.getDate()} ${hh}:${mm}`);
+                        } else if (step <= 43200) {
+                            // 6小时或12小时聚合：显示月日时:00
+                            const hh = String(date.getHours()).padStart(2, '0');
+                            labels.push(`${date.getMonth()+1}/${date.getDate()} ${hh}:00`);
+                        } else {
+                            // 24小时聚合：只显示月日
+                            labels.push(`${date.getMonth()+1}/${date.getDate()}`);
+                        }
                     }
                     tempValues.push(item.temp === -999 ? null : item.temp);
                     humiValues.push(item.humi === -999 ? null : item.humi);
@@ -1755,7 +1806,31 @@
                                 ticks: {
                                     color: '#64748b',
                                     font: { family: 'Inter', size: 10 },
-                                    maxTicksLimit: diffSec <= 86400 ? 12 : 24
+                                    autoSkip: step === 0, // 原始数据启用默认跳步，聚合数据禁用默认跳步由 callback 控制
+                                    callback: function(val, index) {
+                                        const labels = this.chart.data.labels;
+                                        const total = labels.length;
+                                        if (total === 0) return null;
+                                        
+                                        // 原始数据：直接返回，让 Chart.js 自动跳步
+                                        if (step === 0) {
+                                            return labels[val];
+                                        }
+                                        
+                                        // 聚合数据：强制显示第一项和最后一项（最新时间）并等间距抽样
+                                        const maxTicks = 12; // 限制最多显示的刻度数，防拥挤
+                                        if (total <= maxTicks) {
+                                            return labels[val];
+                                        }
+                                        if (index === 0 || index === total - 1) {
+                                            return labels[val];
+                                        }
+                                        const tStep = Math.floor(total / (maxTicks - 1));
+                                        if (index % tStep === 0 && index < total - Math.floor(tStep / 2)) {
+                                            return labels[val];
+                                        }
+                                        return null;
+                                    }
                                 }
                             },
                             yTemp: {

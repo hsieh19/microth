@@ -257,12 +257,13 @@ async def get_history_data(
     device_id: str = Query(..., description="设备 ID"),
     days: Optional[int] = Query(None, ge=1, le=730, description="获取历史记录的时间跨度（天），最大 730 天"),
     start_ts: Optional[int] = Query(None, description="自定义开始 Unix 时间戳 (秒)"),
-    end_ts: Optional[int] = Query(None, description="自定义结束 Unix 时间戳 (秒)")
+    end_ts: Optional[int] = Query(None, description="自定义结束 Unix 时间戳 (秒)"),
+    agg_interval: Optional[int] = Query(0, description="时间聚合间隔（秒），0表示原始数据")
 ):
     """
     接口 3：拉取指定时间范围的时序数据列表 (按时间升序，供前端重画 Chart.js 曲线)
     """
-    records = await database.get_history_records(device_id, days, start_ts, end_ts)
+    records = await database.get_history_records(device_id, days, start_ts, end_ts, agg_interval)
     return records
 
 @app.get("/api/devices")
