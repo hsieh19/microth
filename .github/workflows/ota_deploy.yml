@@ -62,7 +62,7 @@ jobs:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
           R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          R2_KEY="github-release-mirror/Sensor/Firmware/Temperature Sensor/OTA Updates/versions_list.json"
+          R2_KEY="Sensor/Firmware/Temperature Sensor/OTA Updates/versions_list.json"
 
           # 尝试拉取现有的版本列表
           aws s3 cp "s3://${R2_BUCKET}/${R2_KEY}" /tmp/versions_list.json \
@@ -101,7 +101,7 @@ jobs:
         run: |
           R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           BIN_FILE="firmware/build/monitor.ino.bin"
-          R2_KEY="github-release-mirror/Sensor/Firmware/Temperature Sensor/OTA Updates/microth_Firmware_v${VERSION}.bin"
+          R2_KEY="Sensor/Firmware/Temperature Sensor/OTA Updates/microth_Firmware_v${VERSION}.bin"
 
           aws s3 cp "${BIN_FILE}" "s3://${R2_BUCKET}/${R2_KEY}" \
             --endpoint-url "${R2_ENDPOINT}" \
