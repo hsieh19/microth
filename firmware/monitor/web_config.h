@@ -63,9 +63,14 @@ namespace WebConfig {
         html += ".btn-warn{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;box-shadow:0 4px 12px rgba(249,115,22,0.35);}";
         html += ".btn-warn:hover{opacity:.92;transform:translateY(-1px);}";
         html += ".btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;}";
-        html += ".ota-info-bar{background:rgba(15,23,42,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:14px 16px;margin-bottom:18px;}";
+        html += ".ota-info-bar{display:flex;justify-content:space-between;align-items:center;background:rgba(15,23,42,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:14px 16px;margin-bottom:18px;}";
+        html += ".ota-info-item{text-align:center;flex:1;}";
+        html += ".ota-info-separator{width:1px;height:30px;background:rgba(255,255,255,0.08);}";
         html += ".ota-ver-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;}";
-        html += ".ota-ver-value{font-size:20px;font-weight:700;color:#38bdf8;}";
+        html += ".ota-ver-value{font-size:20px;font-weight:700;}";
+        html += ".ver-current{color:#38bdf8;}";
+        html += ".ver-latest{color:#94a3b8;}";
+        html += ".ver-new{color:#10b981;}";
         html += ".hint{font-size:11px;color:#64748b;margin-top:5px;}";
         html += ".loading-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.92);backdrop-filter:blur(8px);";
         html += "z-index:9999;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;box-sizing:border-box;}";
@@ -170,8 +175,15 @@ namespace WebConfig {
         // ===== 升级 Tab =====
         html += "<div class='tab-content' id='tab-ota'>";
         html += "<div class='ota-info-bar'>";
-        html += "<div class='ota-ver-label'>当前固件版本</div>";
-        html += "<div class='ota-ver-value'>v" FIRMWARE_VERSION "</div>";
+        html += "  <div class='ota-info-item'>";
+        html += "    <div class='ota-ver-label'>当前固件版本</div>";
+        html += "    <div class='ota-ver-value ver-current'>v" FIRMWARE_VERSION "</div>";
+        html += "  </div>";
+        html += "  <div class='ota-info-separator'></div>";
+        html += "  <div class='ota-info-item'>";
+        html += "    <div class='ota-ver-label'>最新可用版本</div>";
+        html += "    <div class='ota-ver-value ver-latest' id='otaLatestVer'>--</div>";
+        html += "  </div>";
         html += "</div>";
 
         html += "<button class='btn btn-outline' id='btnCheck' onclick='checkVersions()'>检查可用版本</button>";
@@ -221,6 +233,11 @@ namespace WebConfig {
         html += "sel.disabled=false;";
         html += "sel.onchange=function(){document.getElementById('btnUpgrade').disabled=!sel.value;};";
         html += "btn.textContent='刷新版本列表';btn.disabled=false;";
+        html += "if(list.length>0){";
+        html += "  var latest=list[0], el=document.getElementById('otaLatestVer');el.textContent='v'+latest;";
+        html += "  if(latest==='" FIRMWARE_VERSION "'){el.className='ota-ver-value ver-new';el.textContent+=' (最新)';}";
+        html += "  else{el.className='ota-ver-value';el.style.color='#eab308';}";
+        html += "}";
         html += "}).catch(function(e){btn.textContent='获取失败，重试';btn.disabled=false;alert('获取版本列表失败: '+e);});}";
         html += "function triggerUpgrade(){";
         html += "var ver=document.getElementById('otaVersionSelect').value;if(!ver)return;";
