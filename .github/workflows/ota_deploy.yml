@@ -1,0 +1,112 @@
+﻿name: Build and Deploy Firmware OTA
+
+# 触发条件：firmware/version.json 变更时触发（与 docker-publish.yml 保持一致的发版语义）
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - 'firmware/version.json'
+  workflow_dispatch: # 也支持手动触发
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. 从 firmware/version.json 中提取版本号
+      - name: Extract firmware version
+        id: get_version
+        run: |
+          VERSION=$(jq -r '.version' firmware/version.json)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected firmware version: $VERSION"
+
+      # 2. 安装 arduino-cli
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      # 3. 配置 arduino-cli 并安装 ESP32 核心
+      - name: Configure arduino-cli and install ESP32 core
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          echo "ESP32 core installed."
+
+      # 4. 编译固件（目标板: ESP32C3 Dev Module，分区方案: min_spiffs）
+      - name: Compile firmware
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32c3:PartitionScheme=min_spiffs \
+            --output-dir firmware/build \
+            firmware/monitor/
+          echo "Compilation complete."
+          ls -lh firmware/build/
+
+      # 5. 安装 AWS CLI（用于 S3 兼容方式访问 Cloudflare R2）
+      - name: Install AWS CLI
+        run: |
+          pip install awscli --quiet
+
+      # 6. 更新 versions_list.json：将新版本号追加到列表头部
+      - name: Update versions_list.json
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          R2_KEY="github-release-mirror/Sensor/Firmware/Temperature Sensor/OTA Updates/versions_list.json"
+
+          # 尝试拉取现有的版本列表
+          aws s3 cp "s3://${R2_BUCKET}/${R2_KEY}" /tmp/versions_list.json \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --region auto 2>/dev/null || echo "[]" > /tmp/versions_list.json
+
+          # 将新版本号插入到列表头部（去重后保留）
+          python3 -c "
+          import json, sys
+          with open('/tmp/versions_list.json') as f:
+              try: versions = json.load(f)
+              except: versions = []
+          ver = '${VERSION}'
+          if ver in versions: versions.remove(ver)
+          versions.insert(0, ver)
+          with open('/tmp/versions_list.json', 'w') as f:
+              json.dump(versions, f)
+          print('Updated versions list:', versions)
+          "
+
+          # 将更新后的 JSON 上传回 R2
+          aws s3 cp /tmp/versions_list.json "s3://${R2_BUCKET}/${R2_KEY}" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --region auto \
+            --content-type "application/json"
+          echo "versions_list.json updated."
+
+      # 7. 上传固件 .bin 到 R2
+      - name: Upload firmware binary to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          BIN_FILE="firmware/build/monitor.ino.bin"
+          R2_KEY="github-release-mirror/Sensor/Firmware/Temperature Sensor/OTA Updates/microth_Firmware_v${VERSION}.bin"
+
+          aws s3 cp "${BIN_FILE}" "s3://${R2_BUCKET}/${R2_KEY}" \
+            --endpoint-url "${R2_ENDPOINT}" \
+            --region auto \
+            --content-type "application/octet-stream"
+          echo "Firmware v${VERSION} uploaded to R2: ${R2_KEY}"

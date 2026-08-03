@@ -39,6 +39,8 @@ namespace NvsStorage {
         global_sensor_alert_enabled = prefs.getBool("sensor_alert", DEFAULT_SENSOR_ALERT_ENABLED);
         // 加载极致省电工作模式开关
         global_low_power_mode = prefs.getBool("low_power", DEFAULT_LOW_POWER_MODE);
+        // 加载在线升级服务地址
+        global_ota_base_url = prefs.getString("ota_url", DEFAULT_OTA_BASE_URL);
  
         prefs.end();
  
@@ -56,13 +58,14 @@ namespace NvsStorage {
         Serial.printf("  上报周期: %lu 毫秒\n", global_report_interval_ms);
         Serial.printf("  传感器报警: %s\n", global_sensor_alert_enabled ? "已启用" : "已禁用");
         Serial.printf("  极致省电模式: %s\n", global_low_power_mode ? "电池供电 (深睡眠)" : "电源供电 (常驻在线)");
+        Serial.printf("  OTA 升级地址: %s\n", global_ota_base_url.c_str());
  
     }
  
     /**
      * @brief 保存新配置到 NVS 闪存，并更新运行期的全局配置变量
      */
-    void save_configs(String ssid, String pass, String url, String key, String dev_id, String dev_name, uint32_t sample_sec, uint32_t interval_sec, bool sensor_alert, bool low_power) {
+    void save_configs(String ssid, String pass, String url, String key, String dev_id, String dev_name, uint32_t sample_sec, uint32_t interval_sec, bool sensor_alert, bool low_power, String ota_url) {
         Preferences prefs;
         
         // 以读写模式打开命名空间
@@ -78,6 +81,7 @@ namespace NvsStorage {
         prefs.putUInt("interval_sec", interval_sec);
         prefs.putBool("sensor_alert", sensor_alert);
         prefs.putBool("low_power", low_power);
+        prefs.putString("ota_url", ota_url);
  
         prefs.end();
  
@@ -92,6 +96,7 @@ namespace NvsStorage {
         global_report_interval_ms = (unsigned long)interval_sec * 1000;
         global_sensor_alert_enabled = sensor_alert;
         global_low_power_mode = low_power;
+        global_ota_base_url = ota_url;
 
         Serial.println("[NVS] 新配置已成功持久化写入 NVS 闪存！");
     }

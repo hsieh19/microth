@@ -3,6 +3,18 @@
 All notable changes to the single-chip firmware project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.2] - 2026-08-03
+
+### Added
+- **在线升级与回退系统 (OTA & Rollback)**:
+  - **选项卡式交互界面**: 在 Web 配网管理后台重构双 Tab 选项卡（配置 Tab / 升级 Tab），融入暗黑拟物毛玻璃风格。
+  - **OTA 服务地址可配置**: 配置 Tab 中新增“在线升级服务地址”输入框，支持用户自定义升级域名，避免写死固件域名带来的维护代价，数据持久化存储于 NVS 中。
+  - **检查与选择升级**: JS 从 NVS 动态拼接 R2 升级接口域名，拉取可用固件版本列表。用户可下拉选择目标版本，一键触发手动升级或降级。
+  - **物理分区级一键秒回退**: 升级 Tab 增加“一键回退到更新前版本”按钮，调用 `esp_ota_set_boot_partition()`，不依赖网络一键瞬间切回备份分区固件并重启。若无备份分区（如首次烧录）按钮自动灰色禁用。
+  - **看门狗安全隔离**: 升级刷写时临时摘除当前任务的硬件看门狗监控（防 15s WDT 中断写入变砖），完成后恢复。
+  - **网络与安全增强**: 本地 API 增加签名 URL 的前缀域名白名单校验，防劫持和恶意固件注入；Worker 端接口增加正则格式验证以防御路径注入。
+  - **GitHub CI 自动化编译流水线**: 新增 `ota_deploy.yml` 自动打包编译 min_spiffs 固件二进制包，并同步追加到 R2 的 `versions_list.json` 清单中。
+
 ## [1.2.1] - 2026-07-08
 
 ### Fixed

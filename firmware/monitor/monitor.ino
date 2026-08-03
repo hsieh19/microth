@@ -19,6 +19,7 @@ unsigned long global_sample_interval_ms;
 unsigned long global_report_interval_ms;
 bool global_sensor_alert_enabled = DEFAULT_SENSOR_ALERT_ENABLED;
 bool global_low_power_mode = DEFAULT_LOW_POWER_MODE;
+String global_ota_base_url;
 
 // 记录上一次数据上报的时间戳 (在低功耗模式下主要用作容错或开机参考)
 unsigned long last_report_time = 0;
@@ -122,23 +123,24 @@ void setup() {
     // 2. 从 NVS 闪存中加载运行时配置 (如果没有则使用退避默认值)
     NvsStorage::load_configs();
 
-    // 3. 配置 BOOT 按键引脚，设置输入上拉
-    pinMode(BOOT_PIN, INPUT_PULLUP);
-    delay(50); // 电平滤波防抖
+    // 3. 决定运行模式
+    bool is_timer_wakeup = (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER);
+    bool no_wifi_config = (global_wifi_ssid.isEmpty() || global_wifi_ssid == DEFAULT_WIFI_SSID);
 
-    // 4. 配网触发判定：如果 SSID 为空、未配置，或者是开机检测到 BOOT 按键被拉低 (按下)
-    bool should_config = (global_wifi_ssid.isEmpty() || 
-                           global_wifi_ssid == DEFAULT_WIFI_SSID || 
-                           digitalRead(BOOT_PIN) == LOW);
+    // [A0] 若为非定时器唤醒（首次上电或物理复位重启），强制清空 RTC 历史缓存，防止垃圾值污染
+    if (!is_timer_wakeup) {
+        rtc_cache_count = 0;
+        Serial.println("[System] 检测到非定时器唤醒（首次上电或物理复位重启），RTC 缓存已强制清零。");
+    }
 
-    if (should_config) {
-        // ==================== AP配网模式分支 ====================
-        Serial.println("[System] 检测到配网触发条件(手动按键或无配置)，启动 AP 配网模式...");
+    if (no_wifi_config) {
+        // ==================== AP 配网模式分支 (无有效配置，强制开启 AP 热点) ====================
+        Serial.println("[System] 未检测到有效 Wi-Fi 配置，强制进入 AP 热点配网模式...");
         run_config_web_server = true;
         config_mode_start_time = millis();
         last_web_visit_time = millis();
 
-        // 初始化 SHT40 传感器，预读取一次温湿度，使 Web 面板渲染时能立即看见数值
+        // 预读取一次传感器，让 Web 面板能立即呈现数值
         Sensor::init();
         float temp_init = 0.0f;
         float humi_init = 0.0f;
@@ -149,35 +151,44 @@ void setup() {
             global_last_read_time = millis();
         }
 
-        // 初始化 WiFi 状态机并强制切换至 AP 配置服务
         WiFiHeal::init();
         WiFiHeal::transition_to(WiFiHeal::STATE_AP_CONFIG);
         Serial.println("[System] 本地 AP 网页配置热点已开启，等待用户配置。");
     } 
+    else if (!is_timer_wakeup && global_low_power_mode) {
+        // ==================== 省电模式下的物理上电/重启分支 ====================
+        // 有配置且是省电模式，但在物理重启上电时，需要无条件开启 5 分钟局域网 Web 服务器供配置
+        Serial.println("[System] 检测到物理重启上电且已启用【极致省电】，无条件开启 5 分钟局域网 Web 配置服务...");
+        run_config_web_server = true;
+        config_mode_start_time = millis();
+        last_web_visit_time = millis();
+
+        Sensor::init();
+        float temp_init = 0.0f;
+        float humi_init = 0.0f;
+        if (Sensor::read(&temp_init, &humi_init)) {
+            global_last_temp = temp_init;
+            global_last_humi = humi_init;
+            global_sensor_ready = true;
+            global_last_read_time = millis();
+        }
+
+        WiFiHeal::init(); // 会自动去连接 STA Wi-Fi，连上后会在后台自动开启 Web 配置服务
+    }
     else if (!global_low_power_mode) {
-        // ==================== 常驻在线模式分支 (电源供电，省电模式关闭) ====================
-        Serial.println("[System] 检测到工作在【电源供电模式】(关闭极致省电)，常驻局域网连接。");
+        // ==================== 常驻在线模式分支 (已配网，常驻供电，不进入深睡眠) ====================
+        Serial.println("[System] 检测到工作在【电源供电模式】(常驻在线)，常驻局域网连接。");
         
         Sensor::init();
-        
-        // 强制初始化 Wi-Fi 状态机与自愈网络（和原本的系统工作逻辑相同）
         WiFiHeal::init();
         
-        // 重置常驻模式缓存和计时器
-        rtc_cache_count = 0;
         last_sample_time_plugged = millis();
         last_report_time_plugged = millis();
         Serial.println("[System] 插电模式系统初始化就绪，进入常驻运行 loop。");
     }
     else {
-        // ==================== 极致省电模式分支 (电池供电，深睡眠循环) ====================
-        Serial.println("[System] 检测到工作在【电池供电模式】(极致省电启动)，执行单次采集...");
-
-        // A0. [H3 修复] 检查唤醒原因：首次上电/手动复位时 RTC_DATA_ATTR 值未定义，强制清零防止随机垃圾值导致逻辑混乱
-        if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_TIMER) {
-            rtc_cache_count = 0;
-            Serial.println("[System] 检测到非定时器唤醒（首次上电/手动复位），RTC 缓存已强制清零。");
-        }
+        // ==================== 极致省电模式的自动定时采集上报分支 (仅由定时器唤醒时触发) ====================
+        Serial.println("[System] 检测到定时器自动唤醒，执行单次采集上报...");
 
         // A. 采集传感器数据
         Sensor::init();
@@ -195,7 +206,7 @@ void setup() {
             Serial.println("[System] 警告: 传感器数据读取失败！");
         }
 
-        // B. [H2 修复] 仅在传感器读取成功时才将数据追加存入 RTC 缓存，防止 -999 哨兵值污染历史数据库
+        // B. 仅在传感器读取成功时才追加存入 RTC 缓存
         if (read_ok) {
             if (rtc_cache_count < MAX_RTC_CACHE) {
                 rtc_temp_cache[rtc_cache_count] = temp;
@@ -204,7 +215,6 @@ void setup() {
                 rtc_cache_count++;
                 Serial.printf("[System] 数据已存入 RTC 缓存，当前积压: %d/%d\n", rtc_cache_count, MAX_RTC_CACHE);
             } else {
-                // 缓存队列已满，覆盖最早的数据
                 Serial.println("[System] 警告: RTC 缓存队列已满，覆盖最早的数据");
                 for (int i = 1; i < MAX_RTC_CACHE; i++) {
                     rtc_temp_cache[i-1] = rtc_temp_cache[i];
@@ -217,16 +227,14 @@ void setup() {
             }
         }
 
-        // C. [H1 修复] 先更新旧记录的年龄偏移，再判断是否上报
-        //    - 只对 rtc_cache_count-1 条旧记录累加，跳过刚追加的最新记录（其 offset 应保持为 0）
-        //    - 必须在上报（可能清零缓存）之前执行，避免清零后变成无效空循环
+        // C. 更新旧记录的相对时间年龄偏移量
         uint32_t sample_sec = global_sample_interval_ms / 1000;
         uint32_t interval_sec = global_report_interval_ms / 1000;
         for (int i = 0; i < rtc_cache_count - 1; i++) {
             rtc_offset_sec_cache[i] += sample_sec;
         }
 
-        // D. 根据采集数与周期设定判定是否触发连网批量上报
+        // D. 依据累计条数与周期比值，判断是否需要联网批量上报
         uint32_t report_count_threshold = interval_sec / sample_sec;
         if (report_count_threshold == 0) report_count_threshold = 1;
 
@@ -236,7 +244,6 @@ void setup() {
         if (should_report) {
             Serial.printf("[System] 达到数据上报阈值 (%d/%d)，开始快速连接 Wi-Fi...\n", rtc_cache_count, report_count_threshold);
             if (WiFiHeal::quick_connect_wifi()) {
-                // 连网成功，合并上报 RTC 缓存中记录
                 if (HttpClient::post_bulk_data(rtc_temp_cache, rtc_humi_cache, rtc_offset_sec_cache, rtc_cache_count, enter_remote_config)) {
                     Serial.println("[System] 批量合并历史数据上报成功！重置 RTC 缓存记录。");
                     rtc_cache_count = 0;
@@ -250,7 +257,7 @@ void setup() {
             Serial.printf("[System] 未达到上报阈值 (%d/%d)，跳过网络直接进入休眠。\n", rtc_cache_count, report_count_threshold);
         }
 
-        // E. 检查是否收到远程配置唤醒
+        // E. 检查是否收到远程配置唤醒指令
         if (enter_remote_config) {
             Serial.println("[System] 收到服务器下发的远程配置唤醒指令！");
             Serial.println("[System] 设备将保持 Wi-Fi 连网在线，并启动局域网 Web 服务器以进行配置。");

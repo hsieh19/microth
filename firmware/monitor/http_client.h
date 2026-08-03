@@ -1,4 +1,4 @@
-﻿#ifndef HTTP_CLIENT_H
+#ifndef HTTP_CLIENT_H
 #define HTTP_CLIENT_H
 
 #include <HTTPClient.h>
@@ -124,7 +124,8 @@ namespace HttpClient {
                 global_sample_interval_ms / 1000,
                 target_interval_sec,
                 global_sensor_alert_enabled,
-                global_low_power_mode
+                global_low_power_mode,
+                global_ota_base_url
             );
         }
     }
