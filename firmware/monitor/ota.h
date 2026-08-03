@@ -2,6 +2,7 @@
 #define OTA_H
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 #include <esp_ota_ops.h>

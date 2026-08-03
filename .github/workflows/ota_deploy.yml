@@ -28,19 +28,20 @@ jobs:
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
-      # 3. 配置开发板索引及下载 ESP32 核心支持
+      # 3. 配置开发板索引及下载 ESP32 核心支持 (锁定 2.0.14 版本)
       - name: Install ESP32 Platform
         run: |
-          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core install esp32:esp32 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core update-index --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core install esp32:esp32@2.0.14 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           echo "ESP32 core successfully installed."
 
       # 4. 编译固件（目标板: ESP32C3 Dev Module，分区方案: min_spiffs）
       - name: Compile firmware
         run: |
           arduino-cli compile \
-            --fqbn esp32:esp32:esp32c3:PartitionScheme=min_spiffs \
-            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json \
+            --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashSize=4M,PartitionScheme=min_spiffs \
+            --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json \
             --output-dir firmware/build \
             firmware/monitor/
           echo "Compilation complete."
