@@ -13,10 +13,10 @@
 #define DEFAULT_SAMPLE_INTERVAL_MS 30000
 #define DEFAULT_REPORT_INTERVAL_MS 300000
 
-#define FIRMWARE_VERSION     "1.2.2"
+#define FIRMWARE_VERSION     "1.2.3"
 #define DEFAULT_SENSOR_ALERT_ENABLED true
 #define DEFAULT_LOW_POWER_MODE false
-#define DEFAULT_OTA_BASE_URL "https://update.anyport.one"
+#define DEFAULT_OTA_BASE_URL "https://firmware.yourdomain.com"
 
 // ==================== 运行期全局变量 (启动时自 NVS 闪存中加载) ====================
 extern String global_wifi_ssid;

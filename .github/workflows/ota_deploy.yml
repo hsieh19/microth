@@ -1,20 +1,33 @@
 name: Build and Deploy Firmware OTA
 
-# 触发条件：firmware/version.json 变更时触发（与 docker-publish.yml 保持一致的发版语义）
 on:
   push:
     branches: [ "main", "master" ]
     paths:
       - 'firmware/version.json'
-  workflow_dispatch: # 也支持手动触发
+  workflow_dispatch:
 
 jobs:
   build-and-upload:
     runs-on: ubuntu-latest
 
+    env:
+      PROJECT_ID: "microth"
+      PROJECT_NAME: "Microth 监视器"
+      PROJECT_DESC: "环境温湿度监视器，提供温湿度及照度监测、支持 WiFi 配网、在线配置与 OTA 升级"
+      CHIP_PLATFORM: "ESP32C3"
+      FQBN: "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashSize=4M,PartitionScheme=min_spiffs"
+      SKETCH_PATH: "firmware/monitor/monitor.ino"
+      FLASH_CHIP: "esp32c3"
+      FLASH_MODE: "dio"
+      FLASH_SIZE: "4MB"
+      FLASH_FREQ: "40m"
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # 1. 从 firmware/version.json 中提取版本号
       - name: Extract firmware version
@@ -24,7 +37,7 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected firmware version: $VERSION"
 
-      # 2. 官方 Action 安装 arduino-cli
+      # 2. 安装 arduino-cli
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
@@ -36,75 +49,120 @@ jobs:
           arduino-cli core install esp32:esp32@2.0.14 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           echo "ESP32 core successfully installed."
 
-      # 4. 编译固件（目标板: ESP32C3 Dev Module，分区方案: min_spiffs）
+      # 4. 编译固件 (输出到本地 ./build 目录)
       - name: Compile firmware
         run: |
           arduino-cli compile \
-            --fqbn esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashSize=4M,PartitionScheme=min_spiffs \
+            --fqbn "$FQBN" \
             --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json \
-            --output-dir firmware/build \
-            firmware/monitor/
+            --output-dir ./build \
+            "$SKETCH_PATH"
           echo "Compilation complete."
-          ls -lh firmware/build/
-
-      # 5. 安装 AWS CLI（用于 S3 兼容方式访问 Cloudflare R2）
-      - name: Install AWS CLI
-        run: |
-          pip install awscli --quiet
-
-      # 6. 更新 versions_list.json：将新版本号追加到列表头部
-      - name: Update versions_list.json
+          ls -lh ./build/
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          FQBN: ${{ env.FQBN }}
+          SKETCH_PATH: ${{ env.SKETCH_PATH }}
+
+      # 5. 准备 R2 发布目录树与合包
+      - name: Prepare R2 Directory Structure
+        env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          PROJECT_NAME: ${{ env.PROJECT_NAME }}
+          PROJECT_DESC: ${{ env.PROJECT_DESC }}
+          CHIP_PLATFORM: ${{ env.CHIP_PLATFORM }}
+          FLASH_CHIP: ${{ env.FLASH_CHIP }}
+          FLASH_MODE: ${{ env.FLASH_MODE }}
+          FLASH_SIZE: ${{ env.FLASH_SIZE }}
+          FLASH_FREQ: ${{ env.FLASH_FREQ }}
         run: |
-          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          R2_KEY="Sensor/Firmware/Temperature Sensor/OTA Updates/versions_list.json"
+          rm -rf out
+          OTA_DIR="out/Firmware/OTA Updates/${CHIP_PLATFORM}"
+          FULL_DIR="out/Firmware/Full Firmware Packages/${CHIP_PLATFORM}"
+          mkdir -p "$OTA_DIR" "$FULL_DIR"
 
-          # 尝试拉取现有的版本列表
-          aws s3 cp "s3://${R2_BUCKET}/${R2_KEY}" /tmp/versions_list.json \
-            --endpoint-url "${R2_ENDPOINT}" \
-            --region auto 2>/dev/null || echo "[]" > /tmp/versions_list.json
+          # ① 生成 project.json (提供项目基础信息描述)
+          python3 -c "
+          import json
+          data = {'id': '${PROJECT_ID}', 'name': '${PROJECT_NAME}', 'description': '${PROJECT_DESC}'}
+          print(json.dumps(data, indent=2, ensure_ascii=False))
+          " > out/project.json
 
-          # 将新版本号插入到列表头部（去重后保留）
+          # ② 合并全量固件包 (用于量产烧录网页直烧，偏移地址 0x0)
+          pip install esptool --quiet
+          FULL_BIN_NAME="${PROJECT_ID}_Full_v${VERSION}.bin"
+          esptool.py --chip "${FLASH_CHIP}" merge_bin \
+            -o "${FULL_DIR}/${FULL_BIN_NAME}" \
+            --flash_mode "${FLASH_MODE}" \
+            --flash_size "${FLASH_SIZE}" \
+            --flash_freq "${FLASH_FREQ}" \
+            0x0     ./build/monitor.ino.bootloader.bin \
+            0x8000  ./build/monitor.ino.partitions.bin \
+            0x10000 ./build/monitor.ino.bin
+
+          # ③ 生成 Full Firmware manifest.json 清单
+          FULL_MD5=$(md5sum "${FULL_DIR}/${FULL_BIN_NAME}" | cut -d ' ' -f 1)
+          RELEASE_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          python3 -c "
+          import json
+          data = {
+            'version': '${VERSION}',
+            'filename': '${FULL_BIN_NAME}',
+            'md5': '${FULL_MD5}',
+            'release_time': '${RELEASE_TIME}'
+          }
+          print(json.dumps(data, indent=2))
+          " > "${FULL_DIR}/manifest.json"
+          echo "-> Full manifest: ${FULL_DIR}/manifest.json"
+
+          # ④ 复制 OTA 固件包
+          OTA_BIN_NAME="${PROJECT_ID}_OTA_v${VERSION}.bin"
+          cp ./build/monitor.ino.bin "${OTA_DIR}/${OTA_BIN_NAME}"
+
+          # ⑤ 提取 CHANGELOG 并生成 OTA manifest.json
+          RELEASE_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          OTA_MD5=$(md5sum "${OTA_DIR}/${OTA_BIN_NAME}" | cut -d ' ' -f 1)
+          if [ -f "firmware/CHANGELOG.md" ]; then
+            awk "/## \[${VERSION}\]/{flag=1;next}/## \[/{flag=0}flag" firmware/CHANGELOG.md > temp_changelog.txt
+            CHANGELOG_JSON=$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))' < temp_changelog.txt)
+          else
+            CHANGELOG_JSON='""'
+          fi
           python3 -c "
           import json, sys
-          with open('/tmp/versions_list.json') as f:
-              try: versions = json.load(f)
-              except: versions = []
-          ver = '${VERSION}'
-          if ver in versions: versions.remove(ver)
-          versions.insert(0, ver)
-          with open('/tmp/versions_list.json', 'w') as f:
-              json.dump(versions, f)
-          print('Updated versions list:', versions)
-          "
+          changelog = ${CHANGELOG_JSON}
+          data = {
+            'version': '${VERSION}',
+            'filename': '${OTA_BIN_NAME}',
+            'md5': '${OTA_MD5}',
+            'release_time': '${RELEASE_TIME}',
+            'changelog': changelog
+          }
+          print(json.dumps(data, indent=2))
+          " > "${OTA_DIR}/manifest.json"
+          echo "-> OTA manifest: ${OTA_DIR}/manifest.json"
 
-          # 将更新后的 JSON 上传回 R2
-          aws s3 cp /tmp/versions_list.json "s3://${R2_BUCKET}/${R2_KEY}" \
-            --endpoint-url "${R2_ENDPOINT}" \
-            --region auto \
-            --content-type "application/json"
-          echo "versions_list.json updated."
-
-      # 7. 上传固件 .bin 到 R2
-      - name: Upload firmware binary to R2
+      # 6. 上传数据到 Cloudflare R2
+      - name: Upload to Cloudflare R2
+        uses: jakejarvis/s3-sync-action@master
+        with:
+          args: --follow-symlinks
         env:
+          AWS_S3_BUCKET: ${{ secrets.R2_BUCKET }}
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
-        run: |
-          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          BIN_FILE="firmware/build/monitor.ino.bin"
-          R2_KEY="Sensor/Firmware/Temperature Sensor/OTA Updates/microth_Firmware_v${VERSION}.bin"
+          AWS_S3_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          AWS_REGION: auto
+          SOURCE_DIR: "./out"
+          DEST_DIR: ${{ env.PROJECT_ID }}
 
-          aws s3 cp "${BIN_FILE}" "s3://${R2_BUCKET}/${R2_KEY}" \
-            --endpoint-url "${R2_ENDPOINT}" \
-            --region auto \
-            --content-type "application/octet-stream"
-          echo "Firmware v${VERSION} uploaded to R2: ${R2_KEY}"
+      # 7. 创建 GitHub Release 归档并上传
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            out/Firmware/Full Firmware Packages/${{ env.CHIP_PLATFORM }}/*.bin
+            out/Firmware/OTA Updates/${{ env.CHIP_PLATFORM }}/*.bin
