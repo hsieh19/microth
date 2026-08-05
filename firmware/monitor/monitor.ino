@@ -102,10 +102,15 @@ void enter_deep_sleep(uint64_t sleep_us) {
     // 彻底断开 Wi-Fi 射频以节省电量并停止所有挂起的网络事务
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
-    delay(100);
+    delay(50);
+
+    // [BUG-FIX] 关闭 I2C 总线，防止 SDA/SCL 上拉导致的漏电 (~40-100µA)。
+    // 深睡眠期间 I2C 总线不需工作，唤醒后 Sensor::init() 会重新初始化。
+    Wire.end();
 
     Serial.printf("[System] 进入 Deep Sleep (深睡眠)，时长: %llu 秒...\n", sleep_us / 1000000ULL);
     Serial.flush();
+    Serial.end(); // 关闭串口，减少 UART 功耗
     esp_deep_sleep(sleep_us);
 }
 
@@ -157,29 +162,75 @@ void setup() {
     } 
     else if (!is_timer_wakeup && global_low_power_mode) {
         // ==================== 省电模式下的物理上电/重启分支 ====================
-        // 有配置且是省电模式，但在物理重启上电时，需要无条件开启 5 分钟局域网 Web 服务器供配置
-        Serial.println("[System] 检测到物理重启上电且已启用【极致省电】，无条件开启 5 分钟局域网 Web 配置服务...");
-        run_config_web_server = true;
-        config_mode_start_time = millis();
-        last_web_visit_time = millis();
+        // [BUG-FIX] 旧逻辑无条件开启 5 分钟 Web 服务器，每次意外小幅与复位就浪费 ~8.3mAh。
+        // 新逻辑：检测 BOOT 按键状态，按住才开启 Web 配置服务器；否则采一条数据就直接进入休眠。
+        Serial.println("[System] 检测到物理重启且已启用【极致省电】，检测 BOOT 按键...");
+        pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+        delay(20); // 防抖延时
+        bool boot_btn_held = (digitalRead(BOOT_BUTTON_PIN) == LOW);
 
-        Sensor::init();
-        float temp_init = 0.0f;
-        float humi_init = 0.0f;
-        if (Sensor::read(&temp_init, &humi_init)) {
-            global_last_temp = temp_init;
-            global_last_humi = humi_init;
-            global_sensor_ready = true;
-            global_last_read_time = millis();
+        if (boot_btn_held) {
+            // BOOT 键按下：开启局域网 Web 配置服务器（升级配置通道）
+            Serial.println("[System] 检测到 BOOT 按键按下，开启 5 分钟局域网 Web 配置服务...");
+            run_config_web_server = true;
+            config_mode_start_time = millis();
+            last_web_visit_time = millis();
+
+            Sensor::init();
+            float temp_init = 0.0f;
+            float humi_init = 0.0f;
+            if (Sensor::read(&temp_init, &humi_init)) {
+                global_last_temp = temp_init;
+                global_last_humi = humi_init;
+                global_sensor_ready = true;
+                global_last_read_time = millis();
+            }
+
+            WiFiHeal::init(); // 会自动去连接 STA Wi-Fi，连上后会在后台自动开启 Web 配置服务
+        } else {
+            // BOOT 键没按：采集一条数据存入 RTC 缓存，直接入休眠。
+            // 这样每次意外断电复位不会浪费大量电量，设备会在下个采集周期自动恢复正常工作。
+            Serial.println("[System] BOOT 键未按下，采集单条数据后直接进入 Deep Sleep...");
+            Sensor::init();
+            float temp_boot = -999.0f;
+            float humi_boot = -999.0f;
+            if (Sensor::read(&temp_boot, &humi_boot)) {
+                global_last_temp = temp_boot;
+                global_last_humi = humi_boot;
+                global_sensor_ready = true;
+                // RTC 缓存已在上方清零，直接写入第一条
+                rtc_temp_cache[0] = temp_boot;
+                rtc_humi_cache[0] = humi_boot;
+                rtc_offset_sec_cache[0] = 0;
+                rtc_cache_count = 1;
+                Serial.printf("[System] 首条数据已存入 RTC 缓存: 温度 %.2f °C, 湿度 %.2f %%\n", temp_boot, humi_boot);
+            }
+            uint64_t sleep_us = (uint64_t)global_sample_interval_ms * 1000;
+            enter_deep_sleep(sleep_us);
         }
-
-        WiFiHeal::init(); // 会自动去连接 STA Wi-Fi，连上后会在后台自动开启 Web 配置服务
     }
     else if (!global_low_power_mode) {
         // ==================== 常驻在线模式分支 (已配网，常驻供电，不进入深睡眠) ====================
         Serial.println("[System] 检测到工作在【电源供电模式】(常驻在线)，常驻局域网连接。");
         
         Sensor::init();
+
+        // [FIX] 常驻在线模式开机时立即读取一次传感器，
+        // 避免网页面板在首个采集周期（最多 3 分钟）内一直显示「传感器准备中...」
+        {
+            float temp_init = 0.0f;
+            float humi_init = 0.0f;
+            if (Sensor::read(&temp_init, &humi_init)) {
+                global_last_temp = temp_init;
+                global_last_humi = humi_init;
+                global_sensor_ready = true;
+                global_last_read_time = millis();
+                Serial.printf("[System] 开机初始读取成功: 温度 %.2f °C, 湿度 %.2f %%\n", temp_init, humi_init);
+            } else {
+                Serial.println("[System] 开机初始读取失败，等待首个采集周期重试。");
+            }
+        }
+
         WiFiHeal::init();
         
         last_sample_time_plugged = millis();
@@ -228,9 +279,14 @@ void setup() {
         }
 
         // C. 更新旧记录的相对时间年龄偏移量
+        // [BUG-FIX] 原错误：循环范围 rtc_cache_count-1 导致采集失败时（未入队），
+        // 缓存中最后一条记录的偏移量漏加，导致时间戳漐移。
+        // 修复：若读取成功，新入队的最后一条 offset=0 不加（正确）；
+        //         若读取失败，所有已有条目均需加上一个采集周期。
         uint32_t sample_sec = global_sample_interval_ms / 1000;
         uint32_t interval_sec = global_report_interval_ms / 1000;
-        for (int i = 0; i < rtc_cache_count - 1; i++) {
+        int update_count = read_ok ? (rtc_cache_count - 1) : rtc_cache_count;
+        for (int i = 0; i < update_count; i++) {
             rtc_offset_sec_cache[i] += sample_sec;
         }
 

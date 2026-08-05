@@ -3,6 +3,17 @@
 All notable changes to the single-chip firmware project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.4] - 2026-08-05
+
+### Added
+- **常驻模式上电初始采集**: 修复常驻在线模式下，在首个采集周期（最多3分钟）内刷新网页始终显示“⏳ 传感器准备中...”的体验缺陷，调整为上电时立即进行一次单点数据采集，实现网页面板温湿度秒开即显。
+
+### Fixed
+- **Deep Sleep 漏电修复 (I2C & Serial) [P0]**: 在 `enter_deep_sleep()` 中加入 `Wire.end()` 与 `Serial.end()`，彻底关断 SHT40 传感器 I2C 总线由于上拉电阻引起的漏电（~40-100µA 降至近 0µA）并降低 UART 驱动消耗，保证了 18650 电池极致低功耗休眠质量。
+- **防止意外物理复位耗电机制 [P0]**: 重构了物理重启且启用极致省电模式时的初始化行为。废除以前无条件保持 5 分钟常驻 Web 配置的高耗电行为（避免每次复位无端消耗 ~8.3mAh），改用 GPIO9 (BOOT/FLASH) 按键硬件检测。上电时若未按住 BOOT 键，设备会快速读取一次温湿度，写入 RTC 缓存，然后秒入休眠；若按住 BOOT 键则正常启动 5 分钟 Web 局域网服务，兼顾了低功耗安全性与便捷配网。
+- **看门狗安全隔离与超时规避 [P1]**: 放宽 `WDT_TIMEOUT_SEC` 看门狗超时至 20 秒，同时把 `STA_CONNECT_TIMEOUT_MS` 快速连网检测从 15 秒缩短至 8 秒。彻底解决设备由于弱网连接超时刚好卡在 15 秒临界点导致触发硬看门狗复位的问题。
+- **RTC 数据时间戳漂移修复 [P1]**: 优化了 `rtc_offset_sec_cache` 相对时间累加逻辑。在单次数据采集失败（未存入 RTC 缓存）的异常周期下，依然对已积压的旧记录执行 `sample_sec` 累加，解决了先前在此场景下批量合并上传后历史时序图表时间轴错位漂移的 Bug。
+
 ## [1.2.3] - 2026-08-04
 
 ### Changed

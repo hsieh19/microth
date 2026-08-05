@@ -13,7 +13,7 @@
 #define DEFAULT_SAMPLE_INTERVAL_MS 30000
 #define DEFAULT_REPORT_INTERVAL_MS 300000
 
-#define FIRMWARE_VERSION     "1.2.3"
+#define FIRMWARE_VERSION     "1.2.4"
 #define DEFAULT_SENSOR_ALERT_ENABLED true
 #define DEFAULT_LOW_POWER_MODE false
 #define DEFAULT_OTA_BASE_URL "https://firmware.yourdomain.com"
@@ -32,8 +32,8 @@ extern bool global_low_power_mode;
 extern String global_ota_base_url;
 
 // ==================== 硬件级常量配置 (与物理接线或系统死线相关，不建议开放网页修改) ====================
-// 硬件看门狗超时时间 (秒)
-const uint32_t WDT_TIMEOUT_SEC = 15;
+// 硬件看门狗超时时间 (秒)，需大于 WiFi 连接超时 (STA_CONNECT_TIMEOUT_MS)，留有足够余量
+const uint32_t WDT_TIMEOUT_SEC = 20;
 
 // Wi-Fi 连续断连最大忍受时间 (毫秒)，超出后切换回 AP 模式配网，默认 5 分钟 (300000ms)
 const unsigned long WIFI_MAX_DISCONNECT_MS = 300000;
@@ -44,7 +44,11 @@ const int HTTP_TIMEOUT_MS = 4000;
 // 极致省电模式相关常量
 
 const unsigned long CONFIG_MODE_TIMEOUT_MS = 300000; // 配置模式无操作自动休眠超时时间 (5分钟)
-const unsigned long STA_CONNECT_TIMEOUT_MS = 15000;  // 快速联网最大等待时间 (15秒)
+const unsigned long STA_CONNECT_TIMEOUT_MS = 8000;   // 快速联网最大等待时间 (8秒)，缩短失败时高功耗等待，比 WDT 余量充足
+
+// BOOT 按键引脚 (ESP32-C3 内置 BOOT/FLASH 按键，低电平有效)
+// 省电模式下，物理上电时按住此键才会开启局域网 Web 配置服务器
+const int BOOT_BUTTON_PIN = 9;
 
 // I2C 硬件配置
 const int I2C_SDA_PIN = 4;

@@ -4,6 +4,8 @@
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include "config.h"
 #include "nvs_storage.h"
 #include "ota.h"
@@ -220,14 +222,15 @@ namespace WebConfig {
         html += "var rb=document.getElementById('btnRollback'),hint=document.getElementById('rollbackHint');";
         html += "rb.disabled=true;";
         html += "fetch('/api/ota_info').then(function(r){return r.json();}).then(function(d){";
-        html += "_otaBaseUrl=d.ota_base_url;";
         html += "if(d.has_backup){rb.disabled=false;hint.textContent='检测到备份分区，可一键回退';}";
         html += "else{rb.disabled=true;hint.textContent='无可用备份分区，请通过版本列表降级';}";
         html += "}).catch(function(){hint.textContent='获取分区状态失败';});}";
         html += "function checkVersions(){";
-        html += "if(!_otaBaseUrl){loadOtaInfo();}";
         html += "var btn=document.getElementById('btnCheck');btn.textContent='获取中...';btn.disabled=true;";
-        html += "fetch(_otaBaseUrl+'/api/ota/check?project=microth&chip=ESP32C3').then(function(r){return r.json();}).then(function(d){";
+        html += "fetch('/api/ota/check').then(function(r){";
+        html += "if(!r.ok)throw new Error('设备无法连接云端，HTTP '+r.status);";
+        html += "return r.json();}).then(function(d){";
+        html += "if(d.error)throw new Error(d.error);";
         html += "var sel=document.getElementById('otaVersionSelect');";
         html += "sel.innerHTML='<option value=\"\">-- 请选择目标版本 --</option>';";
         html += "if(d.version){";
@@ -357,6 +360,42 @@ namespace WebConfig {
             String ver = Ota::get_ota_info(&has_backup);
             String json = "{\"version\":\"" + ver + "\",\"ota_base_url\":\"" + global_ota_base_url + "\",\"has_backup\":" + (has_backup ? "true" : "false") + "}";
             server.send(200, "application/json", json);
+        });
+
+        // 3.5. OTA 版本检查代理 (设备作为中间人请求公网 AnyFlash 接口，避免浏览器跨域限制)
+        // 参考 anyport-esp32 项目的 handleOtaCheck 实现模式
+        server.on("/api/ota/check", HTTP_GET, []() {
+            last_web_visit_time = millis();
+            
+            String base_url = global_ota_base_url;
+            base_url.trim();
+            while (base_url.endsWith("/")) base_url.remove(base_url.length() - 1);
+            
+            if (base_url.isEmpty()) {
+                server.send(400, "application/json", "{\"error\":\"OTA base URL is not configured\"}");
+                return;
+            }
+
+            WiFiClientSecure client;
+            client.setInsecure();
+            HTTPClient http;
+            String check_url = base_url + "/api/ota/check?project=microth&chip=ESP32C3";
+            Serial.printf("[OTA] 版本检测 URL: %s\n", check_url.c_str());
+
+            http.begin(client, check_url);
+            http.setTimeout(8000);
+            int httpCode = http.GET();
+
+            if (httpCode == HTTP_CODE_OK) {
+                String payload = http.getString();
+                Serial.printf("[OTA] 版本检测成功: %s\n", payload.c_str());
+                server.send(200, "application/json", payload);
+            } else {
+                Serial.printf("[OTA] 版本检测失败，HTTP 码: %d\n", httpCode);
+                server.send(500, "application/json",
+                    "{\"error\":\"云端接口请求失败，错误码: " + String(httpCode) + "\"}");
+            }
+            http.end();
         });
 
         // 4. 触发 OTA 升级/降级
