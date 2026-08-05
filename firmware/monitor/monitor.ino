@@ -111,8 +111,15 @@ void enter_deep_sleep(uint64_t sleep_us) {
     Wire.end();
 
     Serial.printf("[System] 进入 Deep Sleep (深睡眠)，时长: %llu 秒...\n", sleep_us / 1000000ULL);
-    Serial.flush();
-    Serial.end(); // 关闭串口，减少 UART 功耗
+    #if defined(ARDUINO_USB_CDC_ON_BOOT) && (ARDUINO_USB_CDC_ON_BOOT == 1)
+        if (Serial) {
+            Serial.flush();
+            Serial.end();
+        }
+    #else
+        Serial.flush();
+        Serial.end(); // 关闭串口，减少 UART 功耗
+    #endif
     esp_deep_sleep(sleep_us);
 }
 

@@ -18,7 +18,7 @@ jobs:
       PROJECT_NAME: "Microth 监视器"
       PROJECT_DESC: "环境温湿度监视器，提供温湿度及照度监测、支持 WiFi 配网、在线配置与 OTA 升级"
       CHIP_PLATFORM: "ESP32C3"
-      FQBN: "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashSize=4M,PartitionScheme=min_spiffs"
+      FQBN: "esp32:esp32:esp32c3:CDCOnBoot=default,FlashMode=dio,FlashSize=4M,PartitionScheme=min_spiffs"
       SKETCH_PATH: "firmware/monitor/monitor.ino"
       FLASH_CHIP: "esp32c3"
       FLASH_MODE: "dio"

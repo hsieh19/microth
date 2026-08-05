@@ -13,7 +13,7 @@
 #define DEFAULT_SAMPLE_INTERVAL_MS 30000
 #define DEFAULT_REPORT_INTERVAL_MS 300000
 
-#define FIRMWARE_VERSION     "1.3.0"
+#define FIRMWARE_VERSION     "1.3.1"
 #define DEFAULT_SENSOR_ALERT_ENABLED true
 #define DEFAULT_LOW_POWER_MODE false
 #define DEFAULT_OTA_BASE_URL "https://firmware.yourdomain.com"

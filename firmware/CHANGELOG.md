@@ -3,6 +3,14 @@
 All notable changes to the single-chip firmware project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.1] - 2026-08-05
+
+### Fixed
+
+- **ESP32-C3 简约版（Native USB CDC）脱机休眠卡死修复 [P0]**:
+  - 在 GitHub Actions 工作流 (`ota_deploy.yml`) 中将 `FQBN` 编译配置中的 `CDCOnBoot` 从 `cdc` 修改为 `default`，禁用芯片开机原生 USB CDC 并转向硬件 UART0，彻底解决了简约版脱离电脑 USB 独立供电（电池或充电头）时，因缺乏 USB Host 握手导致 `Serial.flush()` 无限阻塞、无法进入 Deep Sleep 或无法定时唤醒上传数据的致命缺陷。
+  - 在 `monitor.ino` 的 `enter_deep_sleep()` 中增加针对 `ARDUINO_USB_CDC_ON_BOOT` 与 `if (Serial)` 的条件连通性检测，防止在 Native USB CDC 模式下脱机休眠因串口刷盘发生死锁。
+
 ## [1.3.0] - 2026-08-05
 
 ### Fixed
