@@ -3,6 +3,19 @@
 All notable changes to the single-chip firmware project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.0] - 2026-08-05
+
+### Fixed
+
+- **HTTP 客户端野指针崩溃修复 (Core 0 Panic - Instruction Access Fault) [P0]**:
+  - 将 `post_data_with_offset` 和 `post_bulk_data` 中的 `plain_client` 与 `secure_client` 对象的生命周期从 `if/else` 条件块局部作用域提升至整个 HTTP 函数顶层作用域，彻底解决了因为 C++ 局部对象过早析构导致 `HTTPClient` 在 `http.POST()` 时尝试访问已销毁虚指针（`0x00000000`）而引发硬件级 Panic 崩溃复位的致命 Bug。
+- **省电模式无操作 30 秒自动关闭 Web 服务**:
+  - 移除了移动设备连接 AP 热点时系统后台探针（Captive Portal Probe）对无操作超时计时器的误重置。
+  - 在无操作超时关机时，显式关闭 Web 服务器与 Wi-Fi 软热点，并将开机首笔数据安全保留至 RTC 慢速内存（网络连通时实时上报），最后断开无线射频安全进入 Deep Sleep。
+- **省电模式下数据上传连通性与格式兼容**:
+  - 在 `quick_connect_wifi()` 快速连接中增加了对 DHCP IP 地址分配状态（非 `0.0.0.0`）的轮询校验与 200ms 协议栈稳定延时，解决了因网络已连通但 IP 尚未就绪导致 HTTP 请求报 `-1` 错误的问题。
+  - 在 `post_bulk_data` 中新增单条记录识别逻辑，当数据量为 1 时自动优先采用兼容的标准单点 JSON 结构（`post_data_with_offset`）进行投递，避免因后端不支持 `records` 嵌套数组而返回 400 格式错误。
+
 ## [1.2.4] - 2026-08-05
 
 ### Added

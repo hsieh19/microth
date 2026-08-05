@@ -189,17 +189,19 @@ namespace WiFiHeal {
         WiFi.begin(global_wifi_ssid.c_str(), global_wifi_password.c_str());
         
         unsigned long start_time = millis();
-        while (WiFi.status() != WL_CONNECTED) {
+        // [BUG-FIX] 不仅校验 WiFi.status() 连通，还必须校验 DHCP 已获取有效 IP (非 0.0.0.0)
+        while (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
             delay(50);
             esp_task_wdt_reset(); // 喂狗，防止在连网过程中触发复位
             
             if (millis() - start_time > STA_CONNECT_TIMEOUT_MS) {
-                Serial.printf("[WiFi] 连接 Wi-Fi 超时 (%lu 毫秒)！\n", STA_CONNECT_TIMEOUT_MS);
+                Serial.printf("[WiFi] 连接 Wi-Fi 或获取 IP 超时 (%lu 毫秒)！\n", STA_CONNECT_TIMEOUT_MS);
                 WiFi.disconnect();
                 return false;
             }
         }
         
+        delay(200); // 额外稳定 200ms，确保 TCP/IP 协议栈就绪
         Serial.print("[WiFi] 快速连接成功！IP 地址: ");
         Serial.println(WiFi.localIP());
         current_state = STATE_STA_CONNECTED;

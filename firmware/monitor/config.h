@@ -13,7 +13,7 @@
 #define DEFAULT_SAMPLE_INTERVAL_MS 30000
 #define DEFAULT_REPORT_INTERVAL_MS 300000
 
-#define FIRMWARE_VERSION     "1.2.4"
+#define FIRMWARE_VERSION     "1.3.0"
 #define DEFAULT_SENSOR_ALERT_ENABLED true
 #define DEFAULT_LOW_POWER_MODE false
 #define DEFAULT_OTA_BASE_URL "https://firmware.yourdomain.com"
@@ -43,8 +43,8 @@ const int HTTP_TIMEOUT_MS = 4000;
 
 // 极致省电模式相关常量
 
-const unsigned long CONFIG_MODE_TIMEOUT_MS = 300000; // 配置模式无操作自动休眠超时时间 (5分钟)
-const unsigned long STA_CONNECT_TIMEOUT_MS = 8000;   // 快速联网最大等待时间 (8秒)，缩短失败时高功耗等待，比 WDT 余量充足
+const unsigned long CONFIG_MODE_TIMEOUT_MS = 30000;  // 配置模式无操作自动休眠超时时间 (30秒)
+const unsigned long STA_CONNECT_TIMEOUT_MS = 15000;  // 快速联网最大等待时间 (15秒)，缩短失败时高功耗等待，比 WDT 余量充足
 
 // BOOT 按键引脚 (ESP32-C3 内置 BOOT/FLASH 按键，低电平有效)
 // 省电模式下，物理上电时按住此键才会开启局域网 Web 配置服务器

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 #include <esp_arduino_version.h>
+#include <esp_sleep.h>
 
 #include "config.h"
 #include "nvs_storage.h"
@@ -133,7 +134,9 @@ void setup() {
     NvsStorage::load_configs();
 
     // 3. 决定运行模式
-    bool is_timer_wakeup = (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER);
+    esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+    bool is_timer_wakeup = (wakeup_cause == ESP_SLEEP_WAKEUP_TIMER);
+    bool is_gpio_wakeup = (wakeup_cause == ESP_SLEEP_WAKEUP_GPIO);
     bool no_wifi_config = (global_wifi_ssid.isEmpty() || global_wifi_ssid == DEFAULT_WIFI_SSID);
 
     // [A0] 若为非定时器唤醒（首次上电或物理复位重启），强制清空 RTC 历史缓存，防止垃圾值污染
@@ -141,6 +144,7 @@ void setup() {
         rtc_cache_count = 0;
         Serial.println("[System] 检测到非定时器唤醒（首次上电或物理复位重启），RTC 缓存已强制清零。");
     }
+ 
 
     if (no_wifi_config) {
         // ==================== AP 配网模式分支 (无有效配置，强制开启 AP 热点) ====================
@@ -166,52 +170,23 @@ void setup() {
     } 
     else if (!is_timer_wakeup && global_low_power_mode) {
         // ==================== 省电模式下的物理上电/重启分支 ====================
-        // [BUG-FIX] 旧逻辑无条件开启 5 分钟 Web 服务器，每次意外小幅与复位就浪费 ~8.3mAh。
-        // 新逻辑：检测 BOOT 按键状态，按住才开启 Web 配置服务器；否则采一条数据就直接进入休眠。
-        Serial.println("[System] 检测到物理重启且已启用【极致省电】，检测 BOOT 按键...");
-        pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
-        delay(20); // 防抖延时
-        bool boot_btn_held = (digitalRead(BOOT_BUTTON_PIN) == LOW);
+        // 无条件直接开启 Web 配置服务 (30 秒无操作将自动关闭并休眠)
+        Serial.println("[System] 检测到物理重启，开启 Web 配置服务 (30 秒无操作自动关机休眠)...");
+        run_config_web_server = true;
+        config_mode_start_time = millis();
+        last_web_visit_time = millis();
 
-        if (boot_btn_held) {
-            // BOOT 键按下：开启局域网 Web 配置服务器（升级配置通道）
-            Serial.println("[System] 检测到 BOOT 按键按下，开启 5 分钟局域网 Web 配置服务...");
-            run_config_web_server = true;
-            config_mode_start_time = millis();
-            last_web_visit_time = millis();
-
-            Sensor::init();
-            float temp_init = 0.0f;
-            float humi_init = 0.0f;
-            if (Sensor::read(&temp_init, &humi_init)) {
-                global_last_temp = temp_init;
-                global_last_humi = humi_init;
-                global_sensor_ready = true;
-                global_last_read_time = millis();
-            }
-
-            WiFiHeal::init(); // 会自动去连接 STA Wi-Fi，连上后会在后台自动开启 Web 配置服务
-        } else {
-            // BOOT 键没按：采集一条数据存入 RTC 缓存，直接入休眠。
-            // 这样每次意外断电复位不会浪费大量电量，设备会在下个采集周期自动恢复正常工作。
-            Serial.println("[System] BOOT 键未按下，采集单条数据后直接进入 Deep Sleep...");
-            Sensor::init();
-            float temp_boot = -999.0f;
-            float humi_boot = -999.0f;
-            if (Sensor::read(&temp_boot, &humi_boot)) {
-                global_last_temp = temp_boot;
-                global_last_humi = humi_boot;
-                global_sensor_ready = true;
-                // RTC 缓存已在上方清零，直接写入第一条
-                rtc_temp_cache[0] = temp_boot;
-                rtc_humi_cache[0] = humi_boot;
-                rtc_offset_sec_cache[0] = 0;
-                rtc_cache_count = 1;
-                Serial.printf("[System] 首条数据已存入 RTC 缓存: 温度 %.2f °C, 湿度 %.2f %%\n", temp_boot, humi_boot);
-            }
-            uint64_t sleep_us = (uint64_t)global_sample_interval_ms * 1000;
-            enter_deep_sleep(sleep_us);
+        Sensor::init();
+        float temp_init = 0.0f;
+        float humi_init = 0.0f;
+        if (Sensor::read(&temp_init, &humi_init)) {
+            global_last_temp = temp_init;
+            global_last_humi = humi_init;
+            global_sensor_ready = true;
+            global_last_read_time = millis();
         }
+
+        WiFiHeal::init(); // 会自动去连接 STA Wi-Fi 并轮询状态机。连上后提供网页，若30秒连不上则自动切为 AP 配网热点
     }
     else if (!global_low_power_mode) {
         // ==================== 常驻在线模式分支 (已配网，常驻供电，不进入深睡眠) ====================
@@ -304,6 +279,7 @@ void setup() {
         if (should_report) {
             Serial.printf("[System] 达到数据上报阈值 (%d/%d)，开始快速连接 Wi-Fi...\n", rtc_cache_count, report_count_threshold);
             if (WiFiHeal::quick_connect_wifi()) {
+                delay(1000); // [DNS-FIX] 延迟 1 秒，等待 DNS 和 TCP 协议栈完全就绪，防止域名解析失败导致上报失败
                 if (HttpClient::post_bulk_data(rtc_temp_cache, rtc_humi_cache, rtc_offset_sec_cache, rtc_cache_count, enter_remote_config)) {
                     Serial.println("[System] 批量合并历史数据上报成功！重置 RTC 缓存记录。");
                     rtc_cache_count = 0;
@@ -339,35 +315,44 @@ void loop() {
 
     // 2. 情况一：处于 Web 网页配置服务轮询期 (AP 模式或被远程唤醒的局域网配置)
     if (run_config_web_server) {
-        if (WiFiHeal::is_in_ap_mode()) {
-            // AP 模式下：轮询 DNS 与 Web 网页请求
-            bool config_submitted = WebConfig::handle();
-            if (config_submitted) {
-                Serial.println("[System] 网页端提交了配置，系统即将重启以应用！");
-                Serial.flush();
-                delay(500);
-                ESP.restart();
-            }
-        } else {
-            // STA 模式下 (即通过上报接收到服务器唤醒配置指令后)：轮询本地 Web Server 请求
-            bool config_submitted = WebConfig::handle_sta();
-            if (config_submitted) {
-                Serial.println("[System] 局域网提交了配置更新，系统即将重启以应用新参数！");
-                Serial.flush();
-                delay(500);
-                ESP.restart();
-            }
-        }
+        // 运行网络自愈状态机 (处理连接建立及 Web 配置服务轮询)
+        WiFiHeal::handle();
 
-        // 3. 自动超时休眠保护：仅在电池省电模式下，被远程唤醒无操作时，强制重返休眠，保护电池电量
+        // 3. 自动超时休眠保护：仅在电池省电模式下，无操作达 30 秒限制，强制重返休眠，保护电池电量
         if (global_low_power_mode) {
             unsigned long now = millis();
             if (now - last_web_visit_time > CONFIG_MODE_TIMEOUT_MS) {
-                Serial.printf("[System] 配置模式无操作已达 %lu 秒超时限制，自动重新进入 Deep Sleep...\n", 
-                              CONFIG_MODE_TIMEOUT_MS / 1000);
+                Serial.printf("[System] 配置模式无操作已达 %lu 秒超时限制，自动关闭 Web 服务并进入 Deep Sleep...\n", 
+                               CONFIG_MODE_TIMEOUT_MS / 1000);
                 Serial.flush();
                 
-                uint64_t sleep_us = (uint64_t)global_report_interval_ms * 1000;
+                // 彻底关闭 Web 配置服务器
+                WebConfig::stop_ap_server();
+                WebConfig::stop_sta_server();
+                run_config_web_server = false;
+
+                // [上报第一条] 进入深睡眠前强制采集一笔最新数据
+                float t_now = -999.0f;
+                float h_now = -999.0f;
+                if (Sensor::read(&t_now, &h_now)) {
+                    global_last_temp = t_now;
+                    global_last_humi = h_now;
+                    global_sensor_ready = true;
+                    
+                    // 若网络连通则上报；若未连通则存入 RTC 慢速内存 (绝不入易失的 RAM 缓存)
+                    bool dummy = false;
+                    if (WiFiHeal::is_connected()) {
+                        HttpClient::post_data(global_last_temp, global_last_humi, dummy);
+                    } else if (rtc_cache_count < MAX_RTC_CACHE) {
+                        rtc_temp_cache[rtc_cache_count] = t_now;
+                        rtc_humi_cache[rtc_cache_count] = h_now;
+                        rtc_offset_sec_cache[rtc_cache_count] = 0;
+                        rtc_cache_count++;
+                        Serial.println("[System] 网络未就绪，开机首条数据已安全存入 RTC 缓存。");
+                    }
+                }
+
+                uint64_t sleep_us = (uint64_t)global_sample_interval_ms * 1000;
                 enter_deep_sleep(sleep_us);
             }
         }

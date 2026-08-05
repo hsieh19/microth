@@ -2,6 +2,7 @@
 #define HTTP_CLIENT_H
 
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include "config.h"
 #include "wifi_heal.h"
 #include "nvs_storage.h"
@@ -136,8 +137,21 @@ namespace HttpClient {
         }
 
         HTTPClient http;
-        if (!http.begin(global_server_url)) {
-            Serial.println("[HTTP] 无法初始化 HTTP 客户端连接");
+        bool is_https = global_server_url.startsWith("https://");
+        bool init_ok = false;
+        
+        WiFiClientSecure secure_client;
+        WiFiClient plain_client;
+
+        if (is_https) {
+            secure_client.setInsecure();
+            init_ok = http.begin(secure_client, global_server_url);
+        } else {
+            init_ok = http.begin(plain_client, global_server_url);
+        }
+
+        if (!init_ok) {
+            Serial.println("[HTTP] 无法初始化 HTTP/HTTPS 客户端连接");
             return false;
         }
 
@@ -221,9 +235,30 @@ namespace HttpClient {
             return false;
         }
 
+        // [BUG-FIX] 当仅有 1 条记录时，优先尝试标准单点 JSON 格式上报，完美兼容单点后端 API
+        if (count == 1) {
+            if (post_data_with_offset(temps[0], humis[0], offsets[0], out_enter_config)) {
+                return true;
+            }
+            Serial.println("[HTTP] 单点格式上报未成功，尝试降级使用批量 records 格式重试...");
+        }
+
         HTTPClient http;
-        if (!http.begin(global_server_url)) {
-            Serial.println("[HTTP] 无法初始化 HTTP 客户端连接");
+        bool is_https = global_server_url.startsWith("https://");
+        bool init_ok = false;
+        
+        WiFiClientSecure secure_client;
+        WiFiClient plain_client;
+
+        if (is_https) {
+            secure_client.setInsecure();
+            init_ok = http.begin(secure_client, global_server_url);
+        } else {
+            init_ok = http.begin(plain_client, global_server_url);
+        }
+
+        if (!init_ok) {
+            Serial.println("[HTTP] 无法初始化 HTTP/HTTPS 客户端连接");
             return false;
         }
 

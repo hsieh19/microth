@@ -294,7 +294,7 @@ namespace WebConfig {
     }
 
     void handle_captive_redirect() {
-        last_web_visit_time = millis();
+        // [BUG-FIX] 移除 last_web_visit_time 刷新，防止手机后台探针干扰省电模式 30 秒超时判定
         server.sendHeader("Location", "http://192.168.4.1/", true);
         server.send(302, "text/plain", "");
     }
