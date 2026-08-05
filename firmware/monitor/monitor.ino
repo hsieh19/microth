@@ -7,6 +7,7 @@
 #include "sensor.h"
 #include "wifi_heal.h"
 #include "http_client.h"
+#include "ota.h"
 
 // ==================== 运行期全局变量定义 (对应 config.h 中的 extern 声明) ====================
 String global_wifi_ssid;
@@ -121,6 +122,9 @@ void setup() {
     Serial.println("\n==================================================");
     Serial.println("  轻量化温湿度监控系统 ESP32-C3 固件 v" FIRMWARE_VERSION " 启动");
     Serial.println("==================================================");
+
+    // [OTA] 启动时验证并标记当前运行的分区为有效 (VALID)，从而关闭 bootloader 自动回滚
+    Ota::confirm_running_partition();
 
     // 1. 初始化看门狗
     init_watchdog();

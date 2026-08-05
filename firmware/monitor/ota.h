@@ -32,6 +32,18 @@ namespace Ota {
     }
 
     /**
+     * @brief 检查分区是否包含有效的 ESP32 固件 (检测首字节 Magic Byte 是否为 0xE9)
+     */
+    bool is_partition_valid_app(const esp_partition_t* partition) {
+        if (partition == NULL) return false;
+        uint8_t magic = 0;
+        if (esp_partition_read(partition, 0, &magic, 1) == ESP_OK) {
+            return (magic == 0xE9);
+        }
+        return false;
+    }
+
+    /**
      * @brief 查询 OTA 分区状态信息，供前端 Web 页面渲染使用。
      * 
      * @param has_backup 输出: 是否存在包含有效固件的备份分区 (控制"一键回退"按钮启禁)
@@ -39,18 +51,11 @@ namespace Ota {
      */
     String get_ota_info(bool* has_backup) {
         const esp_partition_t* backup = esp_ota_get_next_update_partition(NULL);
-
         if (backup != NULL) {
-            esp_ota_img_states_t state;
-            if (esp_ota_get_state_partition(backup, &state) == ESP_OK) {
-                *has_backup = (state != ESP_OTA_IMG_UNDEFINED && state != ESP_OTA_IMG_INVALID);
-            } else {
-                *has_backup = false;
-            }
+            *has_backup = is_partition_valid_app(backup);
         } else {
             *has_backup = false;
         }
-
         return String(FIRMWARE_VERSION);
     }
 
@@ -65,18 +70,9 @@ namespace Ota {
         Serial.println("[OTA] 开始执行物理分区一键回退...");
 
         const esp_partition_t* backup = esp_ota_get_next_update_partition(NULL);
-        if (backup == NULL) {
-            Serial.println("[OTA] 错误: 找不到可用的备份分区！");
+        if (backup == NULL || !is_partition_valid_app(backup)) {
+            Serial.println("[OTA] 错误: 找不到可用的备份分区或备份固件无效！");
             return false;
-        }
-
-        // 确认备份分区中有有效固件
-        esp_ota_img_states_t state;
-        if (esp_ota_get_state_partition(backup, &state) == ESP_OK) {
-            if (state == ESP_OTA_IMG_UNDEFINED || state == ESP_OTA_IMG_INVALID) {
-                Serial.println("[OTA] 错误: 备份分区中没有有效固件，无法回退！");
-                return false;
-            }
         }
 
         Serial.printf("[OTA] 将 Boot 目标切换至备份分区: %s (地址: 0x%x)\n",
